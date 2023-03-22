@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "riscv-vsoft",
+    "riscv-vsoft-macros",
+    "riscv-vsoft-test",
+]
