@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "riscv-vsoft",
-    "riscv-vsoft-macros",
-    "riscv-vsoft-test",
+    "riscv-slic",
+    "riscv-slic-macros",
+    "riscv-slic-test",
 ]

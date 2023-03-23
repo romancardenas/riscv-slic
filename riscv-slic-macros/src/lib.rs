@@ -33,56 +33,68 @@ pub fn codegen(input: TokenStream) -> TokenStream {
                 interrupts_ident.push(ident);
                 continue;
             }
-            return quote!(use invalid_input::input_must_be_interrupt_sources::separated_by_comma;).into()
+            return quote!(
+                use invalid_input::input_must_be_interrupt_sources::separated_by_comma;
+            )
+            .into();
         } else {
             if let TokenTree::Punct(punct) = &token {
                 if punct.as_char() == ',' {
                     continue;
                 }
             }
-            return quote!(use invalid_input::input_must_be_interrupt_sources::separated_by_comma;).into()
+            return quote!(
+                use invalid_input::input_must_be_interrupt_sources::separated_by_comma;
+            )
+            .into();
         }
     }
     let n_interrupts: usize = interrupts_ident.len();
     // There must be at least one interrupt source
     if n_interrupts == 0 {
-            return quote!(use invalid_input::you_must_define_at_least::one_interrupt_source::separated_by_comma;).into()
+        return quote!(
+            use invalid_input::you_must_define_at_least::one_interrupt_source::separated_by_comma;
+        )
+        .into();
     }
 
     let interrupts_enum = interrupts_enum(&interrupts_ident);
     let interrupts_into = interrupts_into(&interrupts_ident);
 
     quote! {
-        extern "C" {
-            #(fn #interrupts_ident ();)*
-        }
+        pub mod slic {
+            #[repr(u16)]
+            pub enum Interrupt {
+                #(#interrupts_enum),*
+            }
 
-        #[no_mangle]
-        pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); #n_interrupts] = [
-            #(#interrupts_ident),*
-        ];
-        
-        #[repr(u16)]
-        pub enum Interrupt {
-            #(#interrupts_enum),*
-        }
-        
-        impl Interrupt {
-            #[inline]
-            pub fn try_from(value: u16) -> Result<Self, u16> {
-                match value {
-                    #(#interrupts_into)*
-                    _ => Err(value),
+            impl Interrupt {
+                #[inline]
+                pub fn try_from(value: u16) -> Result<Self, u16> {
+                    match value {
+                        #(#interrupts_into)*
+                        _ => Err(value),
+                    }
                 }
             }
-        }
 
-        #[no_mangle]
-        pub static mut __SOFTWARE_CONTROLLER: riscv_vsoft::SoftInterruptCtrl<#n_interrupts> = riscv_vsoft::SoftInterruptCtrl::new();
+            extern "C" {
+                #(fn #interrupts_ident ();)*
+            }
 
-        #[no_mangle]
-        pub unsafe fn SoftwareExternal() {
-            __SOFTWARE_CONTROLLER.pop(&__SOFTWARE_INTERRUPTS);
+            #[no_mangle]
+            pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); #n_interrupts] = [
+                #(#interrupts_ident),*
+            ];
+
+            #[no_mangle]
+            pub static mut __SLIC: riscv_slic::SLIC<#n_interrupts> = riscv_slic::SLIC::new();
+
+            #[no_mangle]
+            pub unsafe fn SoftwareExternal() {
+                riscv_slic::export::clear_interrupt();
+                __SLIC.pop(&__SOFTWARE_INTERRUPTS);
+            }
         }
     }
     .into()
