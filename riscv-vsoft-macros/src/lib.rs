@@ -61,6 +61,12 @@ pub fn codegen(input: TokenStream) -> TokenStream {
         pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); #n_interrupts] = [
             #(#interrupts_ident),*
         ];
+        
+        #[derive(Copy, Clone, Debug)]
+        #[repr(u16)]
+        pub enum Interrupts {
+            #(#interrupts),*
+        };
 
         #[repr(u16)]
         pub enum Interrupt {
