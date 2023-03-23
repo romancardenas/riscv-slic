@@ -62,12 +62,6 @@ pub fn codegen(input: TokenStream) -> TokenStream {
             #(#interrupts_ident),*
         ];
         
-        #[derive(Copy, Clone, Debug)]
-        #[repr(u16)]
-        pub enum Interrupts {
-            #(#interrupts),*
-        };
-
         #[repr(u16)]
         pub enum Interrupt {
             #(#interrupts_enum),*
