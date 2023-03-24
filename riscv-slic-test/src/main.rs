@@ -1,6 +1,6 @@
 //#![no_std]
 
-riscv_slic::codegen!(GPIO0, GPIO1, SPI5);
+riscv_slic::codegen!(e310x, [GPIO0, GPIO1, SPI5]);
 
 #[no_mangle]
 #[allow(non_snake_case)]
