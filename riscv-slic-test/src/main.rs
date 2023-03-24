@@ -1,4 +1,4 @@
-riscv_slic::codegen!(e310x, [GPIO0, GPIO1, SPI5]);
+riscv_slic::codegen!(e310x, [GPIO0, GPIO1, UART0], [Soft1, Soft3]);
 
 #[no_mangle]
 #[allow(non_snake_case)]
