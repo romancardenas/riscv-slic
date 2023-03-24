@@ -3,10 +3,9 @@ name = "riscv-slic"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+proc-macro = true
 
 [dependencies]
-heapless = "0.7"
-riscv = "0.10"
-riscv-slic-macros = { path = "../riscv-slic-macros" }
-e310x = {version = "0.10", optional = true}
+proc-macro2 = "1.0"
+quote = "1.0"
