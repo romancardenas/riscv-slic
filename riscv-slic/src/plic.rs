@@ -36,10 +36,10 @@ pub fn plic_mod(pac: &Ident, bypassed_hw: &[Ident]) -> TokenStream {
             #[no_mangle]
             pub unsafe extern "C" fn MachineExternal() {
                 if let Some(hw_interrupt) = #pac::PLIC::claim() {
-
-                    match hw_interrupt.try_into() {
-                        Ok(sw_interrupt) => slic::__SLIC.pend(sw_interrupt),
-                        _ => {}, // _ => #pac::__EXTERNAL_INTERRUPTS[hw_interrupt as usize - 1], TODO esto falta en la
+                    let sw_interrupt: Result<super::slic::Interrupt, #pac::Interrupt> = hw_interrupt.try_into();
+                    match sw_interrupt {
+                        Ok(sw_interrupt) => slic::__slic_pend(sw_interrupt as u16),
+                        _ => (#pac::__EXTERNAL_INTERRUPTS[hw_interrupt as usize - 1]._handler)(), // TODO: check for _reserved fields
                     }
 
                     #pac::PLIC::complete(hw_interrupt);

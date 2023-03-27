@@ -44,6 +44,37 @@ pub fn slic_mod(pac: &Ident, sw_handlers: &[Ident]) -> TokenStream {
             queue: BinaryHeap<(u8, u16), Max, #n_interrupts>,
         }
 
+        #[no_mangle]
+        /// (Visible externally) Mark an interrupt as pending
+        pub unsafe fn __slic_pend(interrupt: u16) {
+            __SLIC.pend(self::Interrupt::try_from(interrupt).unwrap());
+        }
+
+        #[no_mangle]
+        /// (Visible externally) Set the SLIC threshold
+        pub unsafe fn __slic_set_threshold(thresh: u8) {
+            __SLIC.set_threshold(thresh);
+        }
+
+        #[no_mangle]
+        /// (Visible externally) Get SLIC threshold
+        pub unsafe fn __slic_get_threshold() -> u8 {
+            __SLIC.get_threshold()
+        }
+
+        #[no_mangle]
+        /// (Visible externally) Set interrupt priority
+        pub unsafe fn __slic_set_priority(interrupt: u16, priority: u8) {
+            __SLIC.set_priority(self::Interrupt::try_from(interrupt).unwrap(), priority);
+        }
+
+        #[no_mangle]
+        /// (Visible externally) Get interrupt priority
+        pub unsafe fn __slic_get_priority(interrupt: u16) -> u8 {
+            __SLIC.get_priority(self::Interrupt::try_from(interrupt).unwrap())
+        }
+
+
         impl SLIC {
             /// Creates a new software interrupt controller
             #[inline]
@@ -58,7 +89,7 @@ pub fn slic_mod(pac: &Ident, sw_handlers: &[Ident]) -> TokenStream {
 
             //// Returns current priority threshold.
             #[inline(always)]
-            pub fn get_threshold(&self) -> u8 {
+            fn get_threshold(&self) -> u8 {
                 self.threshold
             }
 
@@ -68,13 +99,13 @@ pub fn slic_mod(pac: &Ident, sw_handlers: &[Ident]) -> TokenStream {
             ///
             /// Changing the priority threshold may break priority-based critical sections.
             #[inline(always)]
-            pub unsafe fn set_threshold(&mut self, priority: u8) {
+            unsafe fn set_threshold(&mut self, priority: u8) {
                 self.threshold = priority;
             }
 
             /// Returns the current priority of an interrupt source.
             #[inline(always)]
-            pub fn get_priority(&self, interrupt: Interrupt) -> u8 {
+            fn get_priority(&self, interrupt: Interrupt) -> u8 {
                 self.priorities[interrupt as usize]
             }
 
@@ -93,13 +124,13 @@ pub fn slic_mod(pac: &Ident, sw_handlers: &[Ident]) -> TokenStream {
             ///
             /// Changing the priority level of an interrupt may break priority-based critical sections.
             #[inline(always)]
-            pub unsafe fn set_priority(&mut self, interrupt: Interrupt, priority: u8) {
+            unsafe fn set_priority(&mut self, interrupt: Interrupt, priority: u8) {
                 self.priorities[interrupt as usize] = priority;
             }
 
             /// Checks if a given interrupt is pending.
             #[inline(always)]
-            pub fn is_pending(&mut self, interrupt: Interrupt) -> bool {
+            fn is_pending(&mut self, interrupt: Interrupt) -> bool {
                 self.pending[interrupt as usize]
             }
 
@@ -109,7 +140,7 @@ pub fn slic_mod(pac: &Ident, sw_handlers: &[Ident]) -> TokenStream {
             ///
             /// If interrupt priority is 0 or already pending, this request is silently ignored.
             #[inline(always)]
-            pub fn pend(&mut self, interrupt: Interrupt) {
+            fn pend(&mut self, interrupt: Interrupt) {
                 let i = interrupt as usize;
                 if self.priorities[i] == 0 || self.pending[i] {
                     return;
@@ -125,7 +156,7 @@ pub fn slic_mod(pac: &Ident, sw_handlers: &[Ident]) -> TokenStream {
 
             /// Returns `true` if the next queued interrupt can be triggered.
             #[inline(always)]
-            pub fn is_ready(&self) -> bool {
+            fn is_ready(&self) -> bool {
                 match self.queue.peek() {
                     Some(&(p, _)) => p > self.threshold,
                     None => false,
@@ -138,7 +169,7 @@ pub fn slic_mod(pac: &Ident, sw_handlers: &[Ident]) -> TokenStream {
             ///
             /// This method is intended to be used only by the `MachineSoftware` interrupt handler.
             #[inline]
-            pub unsafe fn pop(&mut self, handlers: &[unsafe extern "C" fn(); #n_interrupts]) {
+            unsafe fn pop(&mut self, handlers: &[unsafe extern "C" fn(); #n_interrupts]) {
                 clear_interrupt(); // We clear it at the beginning to allow nested interrupts
                 while self.is_ready() {
                     // SAFETY: we know there is at least one valid interrupt queued.
@@ -209,8 +240,7 @@ pub fn slic_mod(pac: &Ident, sw_handlers: &[Ident]) -> TokenStream {
             #(#sw_handlers),*
         ];
 
-        #[no_mangle]
-        pub static mut __SLIC: SLIC = SLIC::new();
+        static mut __SLIC: SLIC = SLIC::new();
 
         #[no_mangle]
         pub unsafe fn MachineSoft() {
