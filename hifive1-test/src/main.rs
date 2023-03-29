@@ -1,3 +1,21 @@
+#![no_std]
+#![no_main]
+
+extern crate panic_halt;
+
+use hifive1::hal::prelude::*;
+use hifive1::hal::DeviceResources;
+use hifive1::{pin, sprintln};
+use riscv::register::{mie, mstatus};
+use riscv_rt::entry;
+use riscv_slic;
+
+use hifive1::hal::e310x;
+
+// generate SLIC code for this example, only adding a HW interrupt for
+// GPIO4
+// riscv_slic::codegen!(e310x, [GPIO4], []);
+
 // Recursive expansion of codegen! macro
 // ======================================
 
@@ -7,9 +25,7 @@ pub mod plic {
         type Error = e310x::Interrupt;
         fn try_from(value: e310x::Interrupt) -> Result<Self, Self::Error> {
             match value {
-                e310x::Interrupt::GPIO0 => Ok(slic::Interrupt::GPIO0),
-                e310x::Interrupt::GPIO1 => Ok(slic::Interrupt::GPIO1),
-                e310x::Interrupt::UART0 => Ok(slic::Interrupt::UART0),
+                e310x::Interrupt::GPIO4 => Ok(slic::Interrupt::GPIO4),
                 _ => Err(value),
             }
         }
@@ -38,11 +54,11 @@ pub mod slic {
         threshold: u8,
         #[doc = r" Array with the priorities assigned to each software interrupt source."]
         #[doc = r#" Priority 0 is reserved for "interrupt diabled"."#]
-        priorities: [u8; 5usize],
+        priorities: [u8; 1usize],
         #[doc = r" Array to check if a software interrupt source is pending."]
-        pending: [bool; 5usize],
+        pending: [bool; 1usize],
         #[doc = r" Priority queue with pending interrupt sources."]
-        queue: BinaryHeap<(u8, u16), Max, 5usize>,
+        queue: BinaryHeap<(u8, u16), Max, 1usize>,
     }
     #[no_mangle]
     #[doc = r" (Visible externally) Mark an interrupt as pending"]
@@ -61,8 +77,11 @@ pub mod slic {
     }
     #[no_mangle]
     #[doc = r" (Visible externally) Set interrupt priority"]
-    pub unsafe fn __slic_set_priority(interrupt: u16, priority: u8) {
-        __SLIC.set_priority(self::Interrupt::try_from(interrupt).unwrap(), priority);
+    pub unsafe fn __slic_set_priority<I: TryInto<Interrupt>>(interrupt: I, priority: u8)
+    where
+        <I as TryInto<Interrupt>>::Error: core::fmt::Debug,
+    {
+        __SLIC.set_priority(interrupt.try_into().unwrap(), priority);
     }
     #[no_mangle]
     #[doc = r" (Visible externally) Get interrupt priority"]
@@ -75,8 +94,8 @@ pub mod slic {
         pub const fn new() -> Self {
             Self {
                 threshold: 0,
-                priorities: [0; 5usize],
-                pending: [false; 5usize],
+                priorities: [0; 1usize],
+                pending: [false; 1usize],
                 queue: BinaryHeap::new(),
             }
         }
@@ -155,7 +174,7 @@ pub mod slic {
         #[doc = r""]
         #[doc = r" This method is intended to be used only by the `MachineSoftware` interrupt handler."]
         #[inline]
-        unsafe fn pop(&mut self, handlers: &[unsafe extern "C" fn(); 5usize]) {
+        unsafe fn pop(&mut self, handlers: &[unsafe extern "C" fn(); 1usize]) {
             clear_interrupt();
             while self.is_ready() {
                 let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
@@ -197,44 +216,84 @@ pub mod slic {
     #[derive(Clone, Copy, Eq, PartialEq)]
     #[repr(u16)]
     pub enum Interrupt {
-        Soft1 = 0,
-        Soft3 = 1,
-        GPIO0 = 2,
-        GPIO1 = 3,
-        UART0 = 4,
+        GPIO4 = 0,
     }
     impl Interrupt {
         #[inline]
         pub fn try_from(value: u16) -> Result<Self, u16> {
             match value {
-                0 => Ok(Self::Soft1),
-                1 => Ok(Self::Soft3),
-                2 => Ok(Self::GPIO0),
-                3 => Ok(Self::GPIO1),
-                4 => Ok(Self::UART0),
+                0 => Ok(Self::GPIO4),
                 _ => Err(value),
             }
         }
     }
     extern "C" {
-        fn Soft1();
-
-        fn Soft3();
-
-        fn GPIO0();
-
-        fn GPIO1();
-
-        fn UART0();
+        fn GPIO4();
 
     }
     #[no_mangle]
-    pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); 5usize] =
-        [Soft1, Soft3, GPIO0, GPIO1, UART0];
+    pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); 1usize] = [GPIO4];
     static mut __SLIC: SLIC = SLIC::new();
     #[no_mangle]
     pub unsafe fn MachineSoft() {
         clear_interrupt();
         __SLIC.pop(&__SOFTWARE_INTERRUPTS);
     }
+}
+
+// create a handler for GPIO4
+#[allow(non_snake_case)]
+#[no_mangle]
+unsafe fn GPIO4() {
+    sprintln!("Hooray! We reached GPIO4 interrupt.");
+    sprintln!("We got here with a priority of: ");
+    unsafe {
+        let prio = slic::__slic_get_priority(e310x::Interrupt::GPIO4 as u16);
+        sprintln!("{0}", prio);
+    }
+    slic::clear_interrupt();
+}
+
+#[entry]
+fn main() -> ! {
+    let dr = unsafe { DeviceResources::steal() };
+
+    let p = dr.peripherals;
+    let pins = dr.pins;
+
+    // Configure clocks
+    let clocks = hifive1::clock::configure(p.PRCI, p.AONCLK, 64.mhz().into());
+
+    // Configure UART for stdout
+    hifive1::stdout::configure(
+        p.UART0,
+        pin!(pins, uart0_tx),
+        pin!(pins, uart0_rx),
+        115_200.bps(),
+        clocks,
+    );
+    let pin_gpio4 = pin!(pins, dig12);
+    pin_gpio4.into_pull_up_input();
+
+    sprintln!("Setting up the SLIC...");
+    unsafe {
+        slic::enable();
+        mstatus::set_mie();
+        sprintln!("Some threshold tests...");
+        // slic::__slic_set_threshold(5);
+        let thresh = slic::__slic_get_threshold();
+        sprintln!("Current threshold: {0:?}", thresh);
+        sprintln!("Setting some threshold...");
+        slic::__slic_set_threshold(5);
+        let thresh = slic::__slic_get_threshold();
+        sprintln!("New threshold: {0:?}", thresh);
+        sprintln!("Setting up interrupt for GPIO4");
+        slic::__slic_set_priority(e310x::Interrupt::GPIO4, 1);
+        sprintln!("Ready, now interrupt pin 12!");
+        // Now wait for the interrupt to come...
+    }
+    // Disable watchdog
+    let wdg = p.WDOG;
+    wdg.wdogcfg.modify(|_, w| w.enalways().clear_bit());
+    loop {}
 }

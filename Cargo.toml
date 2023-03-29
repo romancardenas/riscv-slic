@@ -2,5 +2,5 @@
 members = [
     "riscv-slic",
     "riscv-slic-test",
-    "board-tests",
+    "hifive1-test",
 ]

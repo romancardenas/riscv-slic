@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 riscv-slic = {path = "../riscv-slic"}
 heapless = "0.7"
-riscv = "0.10"
-e310x = { git = "https://github.com/greenlsi/e310x.git", branch = "svd2rust_up", features = ["rt"]}
+riscv = {git = "https://github.com/rust-embedded/riscv.git", branch = "peripheral-plic"}
+e310x = { git = "https://github.com/greenlsi/e310x.git", branch = "master", features = ["rt"]}
 hifive1 = { version = "0.8.0", features = ["board-hifive1-revb"] }
 bare-metal = "0.2"
 riscv-rt = "0.6.0"
