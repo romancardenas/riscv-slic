@@ -5,15 +5,10 @@ extern crate panic_halt;
 
 use hifive1::hal::prelude::*;
 use hifive1::hal::DeviceResources;
+use hifive1::{pin, sprintln};
+use riscv::register::{mie, mstatus};
 use riscv_rt::entry;
 use riscv_slic;
-/* use hifive1::hal::core::CorePeripherals;
-use hifive1::hal::core::plic::Priority;
-use hifive1::hal::e310x::Interrupt;
- */
-use hifive1::{pin, sprintln};
-// use core::sync::atomic::{AtomicUsize, Ordering};
-//use riscv::register::{mstatus, mie};
 
 // generate SLIC code for this example, only adding a HW interrupt for
 // GPIO4
@@ -56,16 +51,17 @@ fn main() -> ! {
     sprintln!("Setting up the SLIC...");
     unsafe {
         slic::enable();
+        mstatus::set_mie();
         sprintln!("Some threshold tests...");
         // slic::__slic_set_threshold(5);
         let thresh = slic::__slic_get_threshold();
         sprintln!("Current threshold: {0:?}", thresh);
         sprintln!("Setting some threshold...");
-        slic::__slic_set_threshold(1);
+        slic::__slic_set_threshold(5);
         let thresh = slic::__slic_get_threshold();
         sprintln!("New threshold: {0:?}", thresh);
         sprintln!("Setting up interrupt for GPIO4");
-        // slic::__slic_set_priority(e310x::Interrupt::GPIO4 as u16, 6);
+        slic::__slic_set_priority(e310x::Interrupt::GPIO4 as u16, 1);
         sprintln!("Ready, now interrupt pin 12!");
         // Now wait for the interrupt to come...
     }
