@@ -16,4 +16,3 @@ Cargo.lock
 
 .vscode/
 board-tests/.gdb_history
-Cargo.toml
