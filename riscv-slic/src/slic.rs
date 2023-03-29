@@ -64,8 +64,8 @@ pub fn slic_mod(pac: &Ident, sw_handlers: &[Ident]) -> TokenStream {
 
         #[no_mangle]
         /// (Visible externally) Set interrupt priority
-        pub unsafe fn __slic_set_priority(interrupt: u16, priority: u8) {
-            __SLIC.set_priority(self::Interrupt::try_from(interrupt).unwrap(), priority);
+        pub unsafe fn __slic_set_priority(interrupt: e310x::Interrupt, priority: u8) {
+            __SLIC.set_priority(interrupt.try_into().unwrap(), priority);
         }
 
         #[no_mangle]
@@ -229,6 +229,7 @@ pub fn slic_mod(pac: &Ident, sw_handlers: &[Ident]) -> TokenStream {
                     _ => Err(value),
                 }
             }
+            
         }
 
         extern "C" {
