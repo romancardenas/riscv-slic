@@ -11,22 +11,27 @@ use riscv::register::{mie, mstatus};
 use riscv_rt::entry;
 
 // generate SLIC code for this example, only adding a HW binding for RTC
-riscv_slic::codegen!(e310x, [RTC], []);
+riscv_slic::codegen!(e310x, [], [SoftRTC]);
+// TODO molaría hacer PAC, Software, [(Hardware,ClearPart,SoftPart)]
 
-// Recursive expansion of codegen! macro
-// ======================================
-
-// create a handler for GPIO4
+/// HW handler for RTC
 #[allow(non_snake_case)]
 #[no_mangle]
 unsafe fn RTC() {
-    sprintln!("Hooray! We reached RTC interrupt.");
-    sprintln!("We got here with a priority of: ");
-    unsafe {
-        let prio = slic::get_priority(Interrupt::RTC);
-        sprintln!("{0}", prio);
-    }
-    slic::clear_interrupt();
+    // increase rtccmp to clear HW interrupt
+    let rtc = DeviceResources::steal().peripherals.RTC;
+    let rtccmp = rtc.rtccmp.read().bits();
+    sprintln!("external RTC (rtccmp = {})", rtccmp);
+    rtc.rtccmp.write(|w| w.bits(rtccmp + 65536));
+    // pend corresponding software task
+    slic::pend(slic::Interrupt::SoftRTC);
+}
+
+/// SW handler for RTC
+#[allow(non_snake_case)]
+#[no_mangle]
+unsafe fn SoftRTC() {
+    sprintln!("software");
 }
 
 #[entry]
@@ -36,12 +41,14 @@ fn main() -> ! {
     let cp = dr.core_peripherals;
     let p = dr.peripherals;
     let pins = dr.pins;
+    let mut plic = cp.plic;
 
     // Configure clocks
     let clocks = hifive1::clock::configure(p.PRCI, p.AONCLK, 64.mhz().into());
 
     // make sure that interrupts are off
     unsafe {
+        plic.reset();
         mstatus::clear_mie();
         mie::clear_mtimer();
         mie::clear_mext();
@@ -69,14 +76,12 @@ fn main() -> ! {
 
     // Configure SLIC
     unsafe {
-        slic::set_priority(Interrupt::RTC, 2);
+        slic::set_priority(slic::Interrupt::SoftRTC, 2);
         slic::set_threshold(0);
     }
 
     // Configure PLIC
     unsafe {
-        let mut plic = cp.plic;
-        plic.reset();
         plic.enable_interrupt(Interrupt::RTC);
         plic.set_priority(Interrupt::RTC, Priority::P1);
         plic.set_threshold(Priority::P0);
