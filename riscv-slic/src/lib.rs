@@ -1,10 +1,9 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Group, Ident, TokenStream as TokenStream2, TokenTree};
-use quote::quote;
 
-mod plic;
 mod slic;
 
+/// Helper function to parse groups as vector of identities
 fn group_to_idents(input: Group) -> Vec<Ident> {
     let input_iterator = input.stream().into_iter();
 
@@ -31,7 +30,6 @@ fn group_to_idents(input: Group) -> Vec<Ident> {
 
 // Ex. codegen!(pac, [HW1, HW2], [SW1, SW2])
 // Ex. codegen!(e310x, [GPIO1, RTC], [Task1, Task2])
-
 #[proc_macro]
 pub fn codegen(input: TokenStream) -> TokenStream {
     let input: TokenStream2 = input.into();
@@ -57,12 +55,6 @@ pub fn codegen(input: TokenStream) -> TokenStream {
     };
     let hw_handlers = group_to_idents(hw_handlers.unwrap());
 
-    // PLIC module is optiona, only if there is at least one HW handler
-    let mod_plic = match hw_handlers.len() {
-        0 => "{}".parse().unwrap(),
-        _ => plic::plic_mod(&pac, &hw_handlers),
-    };
-
     // Consume the comma separator
     let separator = match input_iterator.next() {
         Some(TokenTree::Punct(punct)) => Some(punct.as_char()),
@@ -74,17 +66,7 @@ pub fn codegen(input: TokenStream) -> TokenStream {
         Some(TokenTree::Group(array)) => Some(array),
         _ => None,
     };
-    let mut sw_handlers = group_to_idents(sw_handlers.unwrap());
-    sw_handlers.extend_from_slice(&hw_handlers); // Extend software handlers with hardware handlers
+    let sw_handlers = group_to_idents(sw_handlers.unwrap());
 
-    let n_interrupts: usize = sw_handlers.len();
-    assert!(n_interrupts > 0); // There must be at least one interrupt source
-
-    let mod_slic = slic::slic_mod(&pac, &sw_handlers);
-
-    quote! {
-        #mod_plic
-        #mod_slic
-    }
-    .into()
+    slic::slic_mod(&pac, &hw_handlers, &sw_handlers).into()
 }

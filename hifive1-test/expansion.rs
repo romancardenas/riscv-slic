@@ -7,22 +7,14 @@ pub mod slic {
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     #[repr(u16)]
     pub enum Interrupt {
-        GPIO0 = 0,
-        GPIO1 = 1,
-        UART0 = 2,
-        Soft1 = 3,
-        Soft3 = 4,
+        RTC = 0,
     }
     impl TryFrom<u16> for Interrupt {
         type Error = u16;
         #[inline]
         fn try_from(value: u16) -> Result<Self, Self::Error> {
             match value {
-                0 => Ok(Self::GPIO0),
-                1 => Ok(Self::GPIO1),
-                2 => Ok(Self::UART0),
-                3 => Ok(Self::Soft1),
-                4 => Ok(Self::Soft3),
+                0 => Ok(Self::RTC),
                 _ => Err(value),
             }
         }
@@ -31,9 +23,7 @@ pub mod slic {
         type Error = e310x::Interrupt;
         fn try_from(value: e310x::Interrupt) -> Result<Self, Self::Error> {
             match value {
-                e310x::Interrupt::GPIO0 => Ok(Interrupt::GPIO0),
-                e310x::Interrupt::GPIO1 => Ok(Interrupt::GPIO1),
-                e310x::Interrupt::UART0 => Ok(Interrupt::UART0),
+                e310x::Interrupt::RTC => Ok(Interrupt::RTC),
                 _ => Err(value),
             }
         }
@@ -47,11 +37,11 @@ pub mod slic {
         threshold: u8,
         #[doc = r" Array with the priorities assigned to each software interrupt source."]
         #[doc = r#" Priority 0 is reserved for "interrupt diabled"."#]
-        priorities: [u8; 5usize],
+        priorities: [u8; 1usize],
         #[doc = r" Array to check if a software interrupt source is pending."]
-        pending: [bool; 5usize],
+        pending: [bool; 1usize],
         #[doc = r" Priority queue with pending interrupt sources."]
-        queue: BinaryHeap<(u8, u16), Max, 5usize>,
+        queue: BinaryHeap<(u8, u16), Max, 1usize>,
     }
     impl SLIC {
         #[doc = r" Creates a new software interrupt controller"]
@@ -59,8 +49,8 @@ pub mod slic {
         pub const fn new() -> Self {
             Self {
                 threshold: 0,
-                priorities: [0; 5usize],
-                pending: [false; 5usize],
+                priorities: [0; 1usize],
+                pending: [false; 1usize],
                 queue: BinaryHeap::new(),
             }
         }
@@ -139,7 +129,7 @@ pub mod slic {
         #[doc = r""]
         #[doc = r" This method is intended to be used only by the `MachineSoftware` interrupt handler."]
         #[inline]
-        unsafe fn pop(&mut self, handlers: &[unsafe extern "C" fn(); 5usize]) {
+        unsafe fn pop(&mut self, handlers: &[unsafe extern "C" fn(); 1usize]) {
             clear_interrupt();
             while self.is_ready() {
                 let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
@@ -171,20 +161,11 @@ pub mod slic {
         clint.msip.write(|w| w.bits(0x00));
     }
     extern "C" {
-        fn GPIO0();
-
-        fn GPIO1();
-
-        fn UART0();
-
-        fn Soft1();
-
-        fn Soft3();
+        fn RTC();
 
     }
     #[no_mangle]
-    pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); 5usize] =
-        [GPIO0, GPIO1, UART0, Soft1, Soft3];
+    pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); 1usize] = [RTC];
     pub static mut __SLIC: SLIC = SLIC::new();
     #[no_mangle]
     #[allow(non_snake_case)]
