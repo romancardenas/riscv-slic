@@ -3,7 +3,7 @@
 
 extern crate panic_halt;
 
-use hifive1::hal::e310x::{Interrupt, Priority};
+        use hifive1::hal::e310x::{Interrupt};
 use hifive1::hal::prelude::*;
 use hifive1::hal::DeviceResources;
 use hifive1::{pin, sprintln};
@@ -48,7 +48,7 @@ fn main() -> ! {
 
     // make sure that interrupts are off
     unsafe {
-        plic.reset();
+        plic.plic.reset();
         mstatus::clear_mie();
         mie::clear_mtimer();
         mie::clear_mext();
@@ -82,9 +82,9 @@ fn main() -> ! {
 
     // Configure PLIC
     unsafe {
-        plic.enable_interrupt(Interrupt::RTC);
-        plic.set_priority(Interrupt::RTC, Priority::P1);
-        plic.set_threshold(Priority::P0);
+        plic.plic.enable_interrupt(Interrupt::RTC);
+        plic.plic.set_priority(Interrupt::RTC, e310x::plic::Priority::P1);
+        plic.plic.set_threshold(e310x::plic::Priority::P0);
     }
 
     // activate interrupts
