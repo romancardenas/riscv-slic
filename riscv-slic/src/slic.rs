@@ -50,6 +50,7 @@ pub fn slic_mod(pac: &Ident, hw_handlers: &[Ident], sw_handlers: &[Ident]) -> To
         let ident = format_ident!("Clear{}", hw.to_string());
         clear_fn.push(ident);
     }
+    //let mut hw_to_clear: Vec<()>
 
     quote!(
         pub mod slic {
@@ -261,9 +262,12 @@ pub fn slic_mod(pac: &Ident, hw_handlers: &[Ident], sw_handlers: &[Ident]) -> To
                         Ok(sw_interrupt) => __SLIC.pend(sw_interrupt),
                         _ => (#pac::__EXTERNAL_INTERRUPTS[hw_interrupt as usize]._handler)(), // TODO: check for _reserved fields
                     }
-                    // TODO: function to clear interrupt source (implemented by the user)
+                    // Clear the source interrupt
+                    match sw_interrupt {
+                        #(#hw_handlers => #clear_fn (),)*
+                        _ => panic!("No implemented interrupt clearing function for this interrupt!: {0}", sw_interrupt),
+                    }
                     #pac::PLIC::complete(hw_interrupt);
-
                 }
             }
 
