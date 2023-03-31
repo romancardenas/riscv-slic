@@ -50,7 +50,6 @@ pub fn slic_mod(pac: &Ident, hw_handlers: &[Ident], sw_handlers: &[Ident]) -> To
         let ident = format_ident!("Clear{}", hw.to_string());
         clear_fn.push(ident);
     }
-    //let mut hw_to_clear: Vec<()>
 
     quote!(
         pub mod slic {
