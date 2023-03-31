@@ -1,5 +1,5 @@
 use proc_macro2::{Ident, TokenStream};
-use quote::quote;
+use quote::{quote, format_ident};
 
 /// Helper function for generating the interrupt enums. It assigns a number to each source.
 fn interrupts_enum(input: &[Ident]) -> Vec<TokenStream> {
@@ -45,6 +45,11 @@ pub fn slic_mod(pac: &Ident, hw_handlers: &[Ident], sw_handlers: &[Ident]) -> To
     let sw_enums = interrupts_enum(&sw_handlers);
     let u16_matches = u16_to_sw(&sw_handlers);
     let hw_matches = hw_to_sw(pac, hw_handlers);
+    let mut clear_fn: Vec<Ident> = Vec::new();
+    for hw in hw_handlers.iter() {
+        let ident = format_ident!("Clear{}", hw.to_string());
+        clear_fn.push(ident);
+    }
 
     quote!(
         pub mod slic {
@@ -229,6 +234,10 @@ pub fn slic_mod(pac: &Ident, hw_handlers: &[Ident], sw_handlers: &[Ident]) -> To
                 #(fn #sw_handlers ();)*
             }
 
+            extern "C" {
+                #(fn #clear_fn ();)*
+            }
+
             #[no_mangle]
             pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); #n_interrupts] = [
                 #(#sw_handlers),*
@@ -252,7 +261,9 @@ pub fn slic_mod(pac: &Ident, hw_handlers: &[Ident], sw_handlers: &[Ident]) -> To
                         Ok(sw_interrupt) => __SLIC.pend(sw_interrupt),
                         _ => (#pac::__EXTERNAL_INTERRUPTS[hw_interrupt as usize]._handler)(), // TODO: check for _reserved fields
                     }
+                    // TODO: function to clear interrupt source (implemented by the user)
                     #pac::PLIC::complete(hw_interrupt);
+
                 }
             }
 
