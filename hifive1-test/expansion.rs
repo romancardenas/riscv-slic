@@ -8,6 +8,7 @@ pub mod slic {
     #[repr(u16)]
     pub enum Interrupt {
         RTC = 0,
+        SoftLow = 1,
     }
     impl TryFrom<u16> for Interrupt {
         type Error = u16;
@@ -15,15 +16,7 @@ pub mod slic {
         fn try_from(value: u16) -> Result<Self, Self::Error> {
             match value {
                 0 => Ok(Self::RTC),
-                _ => Err(value),
-            }
-        }
-    }
-    impl TryFrom<e310x::Interrupt> for Interrupt {
-        type Error = e310x::Interrupt;
-        fn try_from(value: e310x::Interrupt) -> Result<Self, Self::Error> {
-            match value {
-                e310x::Interrupt::RTC => Ok(Interrupt::RTC),
+                1 => Ok(Self::SoftLow),
                 _ => Err(value),
             }
         }
@@ -37,11 +30,11 @@ pub mod slic {
         threshold: u8,
         #[doc = r" Array with the priorities assigned to each software interrupt source."]
         #[doc = r#" Priority 0 is reserved for "interrupt diabled"."#]
-        priorities: [u8; 1usize],
+        priorities: [u8; 2usize],
         #[doc = r" Array to check if a software interrupt source is pending."]
-        pending: [bool; 1usize],
+        pending: [bool; 2usize],
         #[doc = r" Priority queue with pending interrupt sources."]
-        queue: BinaryHeap<(u8, u16), Max, 1usize>,
+        queue: BinaryHeap<(u8, u16), Max, 2usize>,
     }
     impl SLIC {
         #[doc = r" Creates a new software interrupt controller"]
@@ -49,8 +42,8 @@ pub mod slic {
         pub const fn new() -> Self {
             Self {
                 threshold: 0,
-                priorities: [0; 1usize],
-                pending: [false; 1usize],
+                priorities: [0; 2usize],
+                pending: [false; 2usize],
                 queue: BinaryHeap::new(),
             }
         }
@@ -129,7 +122,7 @@ pub mod slic {
         #[doc = r""]
         #[doc = r" This method is intended to be used only by the `MachineSoftware` interrupt handler."]
         #[inline]
-        unsafe fn pop(&mut self, handlers: &[unsafe extern "C" fn(); 1usize]) {
+        unsafe fn pop(&mut self, handlers: &[unsafe extern "C" fn(); 2usize]) {
             clear_interrupt();
             while self.is_ready() {
                 let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
@@ -163,27 +156,17 @@ pub mod slic {
     extern "C" {
         fn RTC();
 
+        fn SoftLow();
+
     }
     #[no_mangle]
-    pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); 1usize] = [RTC];
+    pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); 2usize] = [RTC, SoftLow];
     pub static mut __SLIC: SLIC = SLIC::new();
     #[no_mangle]
     #[allow(non_snake_case)]
     pub unsafe fn MachineSoft() {
         clear_interrupt();
         __SLIC.pop(&__SOFTWARE_INTERRUPTS);
-    }
-    #[no_mangle]
-    #[allow(non_snake_case)]
-    pub unsafe fn MachineExternal() {
-        if let Some(hw_interrupt) = e310x::PLIC::claim() {
-            let sw_interrupt: Result<Interrupt, e310x::Interrupt> = hw_interrupt.try_into();
-            match sw_interrupt {
-                Ok(sw_interrupt) => __SLIC.pend(sw_interrupt),
-                _ => (e310x::__EXTERNAL_INTERRUPTS[hw_interrupt as usize]._handler)(),
-            }
-            e310x::PLIC::complete(hw_interrupt);
-        }
     }
     #[doc = r" (Visible externally) Set the SLIC threshold"]
     pub unsafe fn set_threshold(thresh: u8) {
@@ -216,5 +199,35 @@ pub mod slic {
         <I as TryInto<Interrupt>>::Error: core::fmt::Debug,
     {
         __SLIC.get_priority(interrupt.try_into().unwrap())
+    }
+    impl TryFrom<e310x::Interrupt> for Interrupt {
+        type Error = e310x::Interrupt;
+        fn try_from(value: e310x::Interrupt) -> Result<Self, Self::Error> {
+            match value {
+                e310x::Interrupt::RTC => Ok(Interrupt::RTC),
+                _ => Err(value),
+            }
+        }
+    }
+    extern "C" {
+        fn ClearRTC();
+
+    }
+    #[no_mangle]
+    pub static __CLEAR_EXTERNAL_INTERRUPTS: [unsafe extern "C" fn(); 1usize] = [ClearRTC];
+    #[no_mangle]
+    #[allow(non_snake_case)]
+    pub unsafe fn MachineExternal() {
+        if let Some(hw_interrupt) = e310x::PLIC::claim() {
+            let sw_interrupt: Result<Interrupt, e310x::Interrupt> = hw_interrupt.try_into();
+            match sw_interrupt {
+                Ok(sw_interrupt) => {
+                    __CLEAR_EXTERNAL_INTERRUPTS[sw_interrupt as usize]();
+                    __SLIC.pend(sw_interrupt);
+                }
+                _ => (e310x::__EXTERNAL_INTERRUPTS[hw_interrupt as usize]._handler)(),
+            }
+            e310x::PLIC::complete(hw_interrupt);
+        }
     }
 }
