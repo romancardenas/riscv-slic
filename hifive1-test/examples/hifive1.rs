@@ -24,7 +24,7 @@ unsafe fn ClearRTC() {
     let rtccmp = rtc.rtccmp.read().bits();
     sprintln!("clear RTC (rtccmp = {})", rtccmp);
     rtc.rtccmp.write(|w| w.bits(rtccmp + 65536));
-    // we also pend the lowest priority SW task right before the RTC SW task is automatically pended
+    // we also pend the lowest priority SW task before the RTC SW task is automatically pended
     slic::pend(slic::Interrupt::SoftLow);
 }
 
@@ -36,7 +36,7 @@ unsafe fn RTC() {
     sprintln!("software RTC");
 }
 
-/// SW handler for SofLow (low priority task with no HW binding).
+/// SW handler for SoftLow (low priority task with no HW binding).
 #[allow(non_snake_case)]
 #[no_mangle]
 unsafe fn SoftLow() {

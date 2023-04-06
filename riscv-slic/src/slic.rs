@@ -1,5 +1,5 @@
 use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote};
+use quote::quote;
 
 /// Helper function for generating the interrupt enums. It assigns a number to each source.
 fn interrupts_enum(input: &[Ident]) -> Vec<TokenStream> {
@@ -20,7 +20,7 @@ fn u16_to_sw(input: &[Ident]) -> Vec<TokenStream> {
 }
 
 /// Creates the SLIC module with the proper interrupt sources.
-pub fn slic_mod(pac: &Ident, hw_handlers: &[Ident], sw_handlers: &[Ident]) -> TokenStream {
+pub fn slic_mod(hw_handlers: &[Ident], sw_handlers: &[Ident]) -> TokenStream {
     // Important: HW first for numeration in HW clear array!
     let sw_handlers: Vec<Ident> = [hw_handlers, sw_handlers].concat();
     let n_interrupts = sw_handlers.len();
@@ -28,13 +28,17 @@ pub fn slic_mod(pac: &Ident, hw_handlers: &[Ident], sw_handlers: &[Ident]) -> To
 
     let sw_enums = interrupts_enum(&sw_handlers);
     let u16_matches = u16_to_sw(&sw_handlers);
-    let mut clear_fn: Vec<Ident> = Vec::new();
-    for hw in hw_handlers.iter() {
-        let ident = format_ident!("Clear{}", hw.to_string());
-        clear_fn.push(ident);
-    }
 
     quote!(
+        extern "C" {
+            #(fn #sw_handlers ();)*
+        }
+
+        #[no_mangle]
+        pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); #n_interrupts] = [
+            #(#sw_handlers),*
+        ];
+
         /// Enumeration of software interrupts
         #[derive(Clone, Copy, Debug, Eq, PartialEq)]
         #[repr(u16)]
@@ -145,7 +149,7 @@ pub fn slic_mod(pac: &Ident, hw_handlers: &[Ident], sw_handlers: &[Ident]) -> To
                 unsafe { self.queue.push_unchecked((self.priorities[i], interrupt as _)) };
                 // Trigger a software interrupt when there is an interrupt awaiting
                 if self.is_ready() {
-                    unsafe { set_interrupt() };
+                    unsafe { swi_set() };
                 }
             }
 
@@ -164,12 +168,11 @@ pub fn slic_mod(pac: &Ident, hw_handlers: &[Ident], sw_handlers: &[Ident]) -> To
             ///
             /// This method is intended to be used only by the `MachineSoftware` interrupt handler.
             #[inline]
-            unsafe fn pop(&mut self, handlers: &[unsafe extern "C" fn(); #n_interrupts]) {
-                clear_interrupt(); // We clear it at the beginning to allow nested interrupts
+            unsafe fn pop(&mut self) {
                 while self.is_ready() {
                     // SAFETY: we know there is at least one valid interrupt queued.
                     let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
-                    self.run(priority, || unsafe { handlers[interrupt as usize]() });
+                    self.run(priority, || unsafe { __SOFTWARE_INTERRUPTS[interrupt as usize]() });
                     self.pending[interrupt as usize] = false; //task finishes only after running the handler
                 }
             }
@@ -188,34 +191,13 @@ pub fn slic_mod(pac: &Ident, hw_handlers: &[Ident], sw_handlers: &[Ident]) -> To
             }
         }
 
-        /// Triggers a machine software interrupt via the CLINT peripheral
-        pub unsafe fn set_interrupt() {
-            let clint = #pac::Peripherals::steal().CLINT;
-            clint.msip.write(|w| w.bits(0x01));
-        }
-
-        /// Clears the Machine Software Interrupt Pending bit via the CLINT peripheral
-        pub unsafe fn clear_interrupt() {
-            let clint = #pac::Peripherals::steal().CLINT;
-            clint.msip.write(|w| w.bits(0x00));
-        }
-
-        extern "C" {
-            #(fn #sw_handlers ();)*
-        }
-
-        #[no_mangle]
-        pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); #n_interrupts] = [
-            #(#sw_handlers),*
-        ];
-
         pub static mut __SLIC: SLIC = SLIC::new();
 
         #[no_mangle]
         #[allow(non_snake_case)]
         pub unsafe fn MachineSoft() {
-            clear_interrupt();
-            __SLIC.pop(&__SOFTWARE_INTERRUPTS);
+            swi_clear(); // We clear it at the beginning to allow nested interrupts
+            __SLIC.pop();
         }
 
         /// (Visible externally) Set the SLIC threshold

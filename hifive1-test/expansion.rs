@@ -3,6 +3,24 @@
 
 pub mod slic {
     use heapless::binary_heap::{BinaryHeap, Max};
+    #[doc = r" Triggers a machine software interrupt via the CLINT peripheral"]
+    pub unsafe fn swi_set() {
+        let clint = e310x::Peripherals::steal().CLINT;
+        clint.msip.write(|w| w.bits(0x01));
+    }
+    #[doc = r" Clears the Machine Software Interrupt Pending bit via the CLINT peripheral"]
+    pub unsafe fn swi_clear() {
+        let clint = e310x::Peripherals::steal().CLINT;
+        clint.msip.write(|w| w.bits(0x00));
+    }
+    extern "C" {
+        fn RTC();
+
+        fn SoftLow();
+
+    }
+    #[no_mangle]
+    pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); 2usize] = [RTC, SoftLow];
     #[doc = r" Enumeration of software interrupts"]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     #[repr(u16)]
@@ -105,7 +123,7 @@ pub mod slic {
                     .push_unchecked((self.priorities[i], interrupt as _))
             };
             if self.is_ready() {
-                unsafe { set_interrupt() };
+                unsafe { swi_set() };
             }
         }
         #[doc = r" Returns `true` if the next queued interrupt can be triggered."]
@@ -122,11 +140,12 @@ pub mod slic {
         #[doc = r""]
         #[doc = r" This method is intended to be used only by the `MachineSoftware` interrupt handler."]
         #[inline]
-        unsafe fn pop(&mut self, handlers: &[unsafe extern "C" fn(); 2usize]) {
-            clear_interrupt();
+        unsafe fn pop(&mut self) {
             while self.is_ready() {
                 let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
-                self.run(priority, || unsafe { handlers[interrupt as usize]() });
+                self.run(priority, || unsafe {
+                    __SOFTWARE_INTERRUPTS[interrupt as usize]()
+                });
                 self.pending[interrupt as usize] = false;
             }
         }
@@ -143,30 +162,12 @@ pub mod slic {
             self.set_threshold(current);
         }
     }
-    #[doc = r" Triggers a machine software interrupt via the CLINT peripheral"]
-    pub unsafe fn set_interrupt() {
-        let clint = e310x::Peripherals::steal().CLINT;
-        clint.msip.write(|w| w.bits(0x01));
-    }
-    #[doc = r" Clears the Machine Software Interrupt Pending bit via the CLINT peripheral"]
-    pub unsafe fn clear_interrupt() {
-        let clint = e310x::Peripherals::steal().CLINT;
-        clint.msip.write(|w| w.bits(0x00));
-    }
-    extern "C" {
-        fn RTC();
-
-        fn SoftLow();
-
-    }
-    #[no_mangle]
-    pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); 2usize] = [RTC, SoftLow];
     pub static mut __SLIC: SLIC = SLIC::new();
     #[no_mangle]
     #[allow(non_snake_case)]
     pub unsafe fn MachineSoft() {
-        clear_interrupt();
-        __SLIC.pop(&__SOFTWARE_INTERRUPTS);
+        swi_clear();
+        __SLIC.pop();
     }
     #[doc = r" (Visible externally) Set the SLIC threshold"]
     pub unsafe fn set_threshold(thresh: u8) {
@@ -200,6 +201,14 @@ pub mod slic {
     {
         __SLIC.get_priority(interrupt.try_into().unwrap())
     }
+    #[inline(always)]
+    fn exti_claim() -> Option<e310x::Interrupt> {
+        e310x::PLIC::claim()
+    }
+    #[inline(always)]
+    fn exti_complete(exti: e310x::Interrupt) {
+        e310x::PLIC::complete(exti);
+    }
     impl TryFrom<e310x::Interrupt> for Interrupt {
         type Error = e310x::Interrupt;
         fn try_from(value: e310x::Interrupt) -> Result<Self, Self::Error> {
@@ -218,16 +227,16 @@ pub mod slic {
     #[no_mangle]
     #[allow(non_snake_case)]
     pub unsafe fn MachineExternal() {
-        if let Some(hw_interrupt) = e310x::PLIC::claim() {
-            let sw_interrupt: Result<Interrupt, e310x::Interrupt> = hw_interrupt.try_into();
-            match sw_interrupt {
-                Ok(sw_interrupt) => {
-                    __CLEAR_EXTERNAL_INTERRUPTS[sw_interrupt as usize]();
-                    __SLIC.pend(sw_interrupt);
+        if let Some(exti) = unsafe { exti_claim() } {
+            let swi: Result<Interrupt, e310x::Interrupt> = exti.try_into();
+            match swi {
+                Ok(swi) => {
+                    __CLEAR_EXTERNAL_INTERRUPTS[swi as usize]();
+                    __SLIC.pend(swi);
                 }
-                _ => (e310x::__EXTERNAL_INTERRUPTS[hw_interrupt as usize]._handler)(),
+                _ => (e310x::__EXTERNAL_INTERRUPTS[exti as usize]._handler)(),
             }
-            e310x::PLIC::complete(hw_interrupt);
+            unsafe { exti_complete(exti) };
         }
     }
 }

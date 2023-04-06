@@ -2,7 +2,8 @@ use proc_macro::TokenStream;
 use proc_macro2::{Group, Ident, TokenStream as TokenStream2, TokenTree};
 use quote::quote;
 
-mod plic;
+mod export;
+mod exti;
 mod slic;
 
 /// Helper function to parse groups as vector of identities
@@ -72,14 +73,19 @@ pub fn codegen(input: TokenStream) -> TokenStream {
     // Assert that we reached the end
     assert!(input_iterator.next().is_none());
 
-    let slic_code = slic::slic_mod(&pac, &hw_handlers, &sw_handlers);
-    let hw_code = plic::hw_mod(&pac, &hw_handlers);
+    let swi_export = export::export_swi(&pac);
+    let slic_code = slic::slic_mod(&hw_handlers, &sw_handlers);
+
+    let exti_export = export::export_exti(&pac);
+    let exti_code = exti::exti_mod(&pac, &hw_handlers);
 
     quote! {
         pub mod slic {
             use heapless::binary_heap::{BinaryHeap, Max};
+            #swi_export
             #slic_code
-            #hw_code
+            #exti_export
+            #exti_code
         }
     }
     .into()
