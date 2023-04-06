@@ -79,6 +79,15 @@ pub fn slic_mod(n_interrupts: usize) -> TokenStream {
                 self.pending[interrupt as usize]
             }
 
+            /// Returns `true` if the next queued interrupt can be triggered.
+            #[inline(always)]
+            fn is_ready(&self) -> bool {
+                match self.queue.peek() {
+                    Some(&(p, _)) => p > self.threshold,
+                    None => false,
+                }
+            }
+
             /// Sets an interrupt source as pending.
             ///
             /// # Notes
@@ -99,41 +108,18 @@ pub fn slic_mod(n_interrupts: usize) -> TokenStream {
                 }
             }
 
-            /// Returns `true` if the next queued interrupt can be triggered.
-            #[inline(always)]
-            fn is_ready(&self) -> bool {
-                match self.queue.peek() {
-                    Some(&(p, _)) => p > self.threshold,
-                    None => false,
-                }
-            }
-
             /// Executes all the pending tasks with high enough priority.
-            ///
-            /// # Safety
-            ///
-            /// This method is intended to be used only by the `MachineSoftware` interrupt handler.
             #[inline]
-            unsafe fn pop(&mut self, swi_handlers: &[unsafe extern "C" fn(); #n_interrupts]) {
-                while self.is_ready() {
-                    // SAFETY: we know there is at least one valid interrupt queued.
-                    let (priority, interrupt) = self.queue.pop_unchecked();
-                    self.run(priority, || swi_handlers[interrupt as usize]());
-                    self.pending[interrupt as usize] = false; //task finishes only after running the handler
+            fn pop(&mut self) -> Option<(u8, u16)> {
+                match self.is_ready() {
+                    true => {
+                        // SAFETY: we know the queue is not empty
+                        let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
+                        self.pending[interrupt as usize] = false; //task finishes only after running the handler
+                        Some((priority, interrupt))
+                    },
+                    false => None,
                 }
-            }
-
-            /// Runs a function with priority mask.
-            ///
-            /// # Safety
-            ///
-            /// This method is intended to be used only by the `PLIC::pop` method.
-            #[inline(always)]
-            unsafe fn run<F: FnOnce()>(&mut self, priority: u8, f: F) {
-                let current = self.get_threshold();
-                self.set_threshold(priority);
-                f();
-                self.set_threshold(current);
             }
         }
     )

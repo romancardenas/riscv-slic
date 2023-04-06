@@ -4,6 +4,7 @@
 pub mod slic {
     use heapless::binary_heap::{BinaryHeap, Max};
     #[doc = r" Clears all interrupt flags to avoid interruptions."]
+    #[inline(always)]
     pub unsafe fn clear_interrupts() {
         riscv::register::mstatus::clear_mie();
         riscv::register::mie::clear_mext();
@@ -14,6 +15,7 @@ pub mod slic {
     }
     #[doc = r" Sets all the interrupt flags to allow external and software interrupts."]
     #[doc = r" It also sets the interrup threshold to 0 (i.e., accept all interrupts)."]
+    #[inline(always)]
     pub unsafe fn set_interrupts() {
         set_threshold(0);
         riscv::register::mstatus::set_mie();
@@ -21,12 +23,14 @@ pub mod slic {
         riscv::register::mie::set_msoft();
     }
     #[doc = r" Sets the priority threshold of the external interrupt controller and the SLIC."]
+    #[inline(always)]
     pub unsafe fn set_threshold(thresh: u8) {
         exti_set_threshold(thresh);
         __SLIC.set_threshold(thresh);
     }
     #[doc = r" Sets the interrupt priority of a given software interrupt"]
     #[doc = r" source in the external interrupt controller and the SLIC."]
+    #[inline(always)]
     pub unsafe fn set_priority<I>(interrupt: I, priority: u8)
     where
         I: TryInto<Interrupt>,
@@ -39,10 +43,12 @@ pub mod slic {
         }
     }
     #[doc = r" Returns the current priority threshold of the SLIC."]
+    #[inline(always)]
     pub unsafe fn get_threshold() -> u8 {
         __SLIC.get_threshold()
     }
     #[doc = r" Returns the interrupt priority of a given software interrupt source."]
+    #[inline(always)]
     pub unsafe fn get_priority<I>(interrupt: I) -> u8
     where
         I: TryInto<Interrupt>,
@@ -51,12 +57,25 @@ pub mod slic {
         __SLIC.get_priority(interrupt.try_into().unwrap())
     }
     #[doc = r" Marks a software interrupt as pending."]
+    #[inline(always)]
     pub unsafe fn pend<I>(interrupt: I)
     where
         I: TryInto<Interrupt>,
         <I as TryInto<Interrupt>>::Error: core::fmt::Debug,
     {
         __SLIC.pend(interrupt.try_into().unwrap());
+    }
+    #[doc = r" Runs a function with priority mask."]
+    #[doc = r""]
+    #[doc = r" # Safety"]
+    #[doc = r""]
+    #[doc = r" If new priority is less than current priority, priority inversion may occur."]
+    #[inline(always)]
+    pub unsafe fn run<F: FnOnce()>(priority: u8, f: F) {
+        let current = get_threshold();
+        set_threshold(priority);
+        f();
+        set_threshold(current);
     }
     use riscv::peripheral::plic::PriorityNumber;
     #[doc = r" Converts an `u8` to the corresponding priority level."]
@@ -182,7 +201,9 @@ pub mod slic {
     #[allow(non_snake_case)]
     pub unsafe fn MachineSoft() {
         swi_clear();
-        __SLIC.pop(&__SOFTWARE_INTERRUPTS);
+        while let Some((priority, interrupt)) = __SLIC.pop() {
+            run(priority, || __SOFTWARE_INTERRUPTS[interrupt as usize]());
+        }
     }
     #[doc = r" Software interrupt controller"]
     #[allow(clippy::upper_case_acronyms)]
@@ -251,6 +272,14 @@ pub mod slic {
         fn is_pending(&mut self, interrupt: Interrupt) -> bool {
             self.pending[interrupt as usize]
         }
+        #[doc = r" Returns `true` if the next queued interrupt can be triggered."]
+        #[inline(always)]
+        fn is_ready(&self) -> bool {
+            match self.queue.peek() {
+                Some(&(p, _)) => p > self.threshold,
+                None => false,
+            }
+        }
         #[doc = r" Sets an interrupt source as pending."]
         #[doc = r""]
         #[doc = r" # Notes"]
@@ -271,38 +300,17 @@ pub mod slic {
                 unsafe { swi_set() };
             }
         }
-        #[doc = r" Returns `true` if the next queued interrupt can be triggered."]
-        #[inline(always)]
-        fn is_ready(&self) -> bool {
-            match self.queue.peek() {
-                Some(&(p, _)) => p > self.threshold,
-                None => false,
-            }
-        }
         #[doc = r" Executes all the pending tasks with high enough priority."]
-        #[doc = r""]
-        #[doc = r" # Safety"]
-        #[doc = r""]
-        #[doc = r" This method is intended to be used only by the `MachineSoftware` interrupt handler."]
         #[inline]
-        unsafe fn pop(&mut self, swi_handlers: &[unsafe extern "C" fn(); 2usize]) {
-            while self.is_ready() {
-                let (priority, interrupt) = self.queue.pop_unchecked();
-                self.run(priority, || swi_handlers[interrupt as usize]());
-                self.pending[interrupt as usize] = false;
+        fn pop(&mut self) -> Option<(u8, u16)> {
+            match self.is_ready() {
+                true => {
+                    let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
+                    self.pending[interrupt as usize] = false;
+                    Some((priority, interrupt))
+                }
+                false => None,
             }
-        }
-        #[doc = r" Runs a function with priority mask."]
-        #[doc = r""]
-        #[doc = r" # Safety"]
-        #[doc = r""]
-        #[doc = r" This method is intended to be used only by the `PLIC::pop` method."]
-        #[inline(always)]
-        unsafe fn run<F: FnOnce()>(&mut self, priority: u8, f: F) {
-            let current = self.get_threshold();
-            self.set_threshold(priority);
-            f();
-            self.set_threshold(current);
         }
     }
 }
