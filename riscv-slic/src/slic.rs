@@ -1,63 +1,9 @@
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::TokenStream;
 use quote::quote;
 
-/// Helper function for generating the interrupt enums. It assigns a number to each source.
-fn interrupts_enum(input: &[Ident]) -> Vec<TokenStream> {
-    input
-        .iter()
-        .enumerate()
-        .map(|(i, interrupt)| format!("{interrupt} = {i}").parse().unwrap())
-        .collect()
-}
-
-/// Helper function for the [`TryFrom`] trait from [`u16`] to software interrupts.
-fn u16_to_sw(input: &[Ident]) -> Vec<TokenStream> {
-    input
-        .iter()
-        .enumerate()
-        .map(|(i, interrupt)| format!("{i} => Ok(Self::{interrupt}),").parse().unwrap())
-        .collect()
-}
-
 /// Creates the SLIC module with the proper interrupt sources.
-pub fn slic_mod(hw_handlers: &[Ident], sw_handlers: &[Ident]) -> TokenStream {
-    // Important: HW first for numeration in HW clear array!
-    let sw_handlers: Vec<Ident> = [hw_handlers, sw_handlers].concat();
-    let n_interrupts = sw_handlers.len();
-    assert!(n_interrupts > 0); // There must be at least one interrupt source
-
-    let sw_enums = interrupts_enum(&sw_handlers);
-    let u16_matches = u16_to_sw(&sw_handlers);
-
+pub fn slic_mod(n_interrupts: usize) -> TokenStream {
     quote!(
-        extern "C" {
-            #(fn #sw_handlers ();)*
-        }
-
-        #[no_mangle]
-        pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); #n_interrupts] = [
-            #(#sw_handlers),*
-        ];
-
-        /// Enumeration of software interrupts
-        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-        #[repr(u16)]
-        pub enum Interrupt {
-            #(#sw_enums),*
-        }
-
-        impl TryFrom<u16> for Interrupt {
-            type Error = u16;
-
-            #[inline]
-            fn try_from(value: u16) -> Result<Self, Self::Error> {
-                match value {
-                    #(#u16_matches)*
-                    _ => Err(value),
-                }
-            }
-        }
-
         /// Software interrupt controller
         #[allow(clippy::upper_case_acronyms)]
         #[derive(Debug, Clone)]
@@ -168,11 +114,11 @@ pub fn slic_mod(hw_handlers: &[Ident], sw_handlers: &[Ident]) -> TokenStream {
             ///
             /// This method is intended to be used only by the `MachineSoftware` interrupt handler.
             #[inline]
-            unsafe fn pop(&mut self) {
+            unsafe fn pop(&mut self, swi_handlers: &[unsafe extern "C" fn(); #n_interrupts]) {
                 while self.is_ready() {
                     // SAFETY: we know there is at least one valid interrupt queued.
-                    let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
-                    self.run(priority, || unsafe { __SOFTWARE_INTERRUPTS[interrupt as usize]() });
+                    let (priority, interrupt) = self.queue.pop_unchecked();
+                    self.run(priority, || swi_handlers[interrupt as usize]());
                     self.pending[interrupt as usize] = false; //task finishes only after running the handler
                 }
             }
@@ -189,49 +135,6 @@ pub fn slic_mod(hw_handlers: &[Ident], sw_handlers: &[Ident]) -> TokenStream {
                 f();
                 self.set_threshold(current);
             }
-        }
-
-        pub static mut __SLIC: SLIC = SLIC::new();
-
-        #[no_mangle]
-        #[allow(non_snake_case)]
-        pub unsafe fn MachineSoft() {
-            swi_clear(); // We clear it at the beginning to allow nested interrupts
-            __SLIC.pop();
-        }
-
-        /// (Visible externally) Set the SLIC threshold
-        pub unsafe fn set_threshold(thresh: u8) {
-            __SLIC.set_threshold(thresh);
-        }
-
-        /// (Visible externally) Get SLIC threshold
-        pub unsafe fn slic_get_threshold() -> u8 {
-            __SLIC.get_threshold()
-        }
-
-        /// (Visible externally) Mark an interrupt as pending
-        pub unsafe fn pend<I>(interrupt: I) where
-        I: TryInto<Interrupt>,
-        <I as TryInto<Interrupt>>::Error: core::fmt::Debug,
-        {
-            __SLIC.pend(interrupt.try_into().unwrap());
-        }
-
-        /// (Visible externally) Set interrupt priority
-        pub unsafe fn set_priority<I>(interrupt: I, priority: u8) where
-        I: TryInto<Interrupt>,
-        <I as TryInto<Interrupt>>::Error: core::fmt::Debug,
-        {
-            __SLIC.set_priority(interrupt.try_into().unwrap(), priority);
-        }
-
-        /// (Visible externally) Get interrupt priority
-        pub unsafe fn get_priority<I>(interrupt: I) -> u8 where
-        I: TryInto<Interrupt>,
-        <I as TryInto<Interrupt>>::Error: core::fmt::Debug,
-        {
-            __SLIC.get_priority(interrupt.try_into().unwrap())
         }
     )
 }

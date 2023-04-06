@@ -2,9 +2,11 @@ use proc_macro::TokenStream;
 use proc_macro2::{Group, Ident, TokenStream as TokenStream2, TokenTree};
 use quote::quote;
 
+mod api;
 mod export;
 mod exti;
 mod slic;
+mod swi;
 
 /// Helper function to parse groups as vector of identities
 fn group_to_idents(input: Group) -> Vec<Ident> {
@@ -51,12 +53,12 @@ pub fn codegen(input: TokenStream) -> TokenStream {
         _ => None,
     };
     assert_eq!(separator.unwrap(), ',');
-    // Get the hw handlers
-    let hw_handlers = match input_iterator.next() {
+    // Get the external interrupt handlers
+    let exti_handlers = match input_iterator.next() {
         Some(TokenTree::Group(array)) => Some(array),
         _ => None,
     };
-    let hw_handlers = group_to_idents(hw_handlers.unwrap());
+    let exti_handlers = group_to_idents(exti_handlers.unwrap());
 
     // Consume the comma separator
     let separator = match input_iterator.next() {
@@ -65,27 +67,39 @@ pub fn codegen(input: TokenStream) -> TokenStream {
     };
     assert_eq!(separator.unwrap(), ',');
     // Get the sw handlers
-    let sw_handlers = match input_iterator.next() {
+    let swi_handlers = match input_iterator.next() {
         Some(TokenTree::Group(array)) => Some(array),
         _ => None,
     };
-    let sw_handlers = group_to_idents(sw_handlers.unwrap());
+    let swi_handlers = group_to_idents(swi_handlers.unwrap());
     // Assert that we reached the end
     assert!(input_iterator.next().is_none());
 
-    let swi_export = export::export_swi(&pac);
-    let slic_code = slic::slic_mod(&hw_handlers, &sw_handlers);
+    let api_code = api::api_mod();
 
     let exti_export = export::export_exti(&pac);
-    let exti_code = exti::exti_mod(&pac, &hw_handlers);
+    let exti_code = exti::exti_mod(&pac, &exti_handlers);
+
+    // Important: EXTI first for numeration in EXTI clear array!
+    let swi_handlers: Vec<Ident> = [exti_handlers, swi_handlers].concat();
+    assert_ne!(swi_handlers.len(), 0);
+
+    let swi_export = export::export_swi(&pac);
+    let swi_code = swi::swi_mod(&swi_handlers);
+    let slic_code = slic::slic_mod(swi_handlers.len());
 
     quote! {
         pub mod slic {
             use heapless::binary_heap::{BinaryHeap, Max};
-            #swi_export
-            #slic_code
+
+            #api_code
+
             #exti_export
             #exti_code
+
+            #swi_export
+            #swi_code
+            #slic_code
         }
     }
     .into()

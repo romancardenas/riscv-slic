@@ -1,8 +1,8 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 
-/// Helper function for the [`TryFrom`] trait from hardware interrupts to software interrupts.
-fn exti_to_sw(pac: &Ident, input: &[Ident]) -> Vec<TokenStream> {
+/// Helper function for the [`TryFrom`] trait from external to software interrupts.
+fn exti_to_swi(pac: &Ident, input: &[Ident]) -> Vec<TokenStream> {
     input
         .iter()
         .map(|interrupt| {
@@ -18,6 +18,24 @@ fn exti_to_sw(pac: &Ident, input: &[Ident]) -> Vec<TokenStream> {
         .collect()
 }
 
+/// Helper function for the [`TryFrom`] trait from software to external interrupts.
+fn swi_to_exti(pac: &Ident, input: &[Ident]) -> Vec<TokenStream> {
+    input
+        .iter()
+        .map(|interrupt| {
+            format!(
+                "Interrupt::{} => Ok({}::Interrupt::{}),",
+                interrupt.to_string(),
+                pac.to_string(),
+                interrupt.to_string(),
+            )
+            .parse()
+            .unwrap()
+        })
+        .collect()
+}
+
+/// Helper function for the clear external interrupt handlers.
 fn exti_to_clear(input: &[Ident]) -> Vec<TokenStream> {
     input
         .iter()
@@ -29,9 +47,10 @@ fn exti_to_clear(input: &[Ident]) -> Vec<TokenStream> {
 pub fn exti_mod(pac: &Ident, exti_handlers: &[Ident]) -> TokenStream {
     let n_exti_interrupts = exti_handlers.len();
     if n_exti_interrupts == 0 {
-        return quote!();
+        return quote!(); // empty code block
     }
-    let exti_matches = exti_to_sw(pac, exti_handlers);
+    let exti_matches = exti_to_swi(pac, exti_handlers);
+    let swi_matches = swi_to_exti(pac, exti_handlers);
     let exti_clear = exti_to_clear(exti_handlers);
 
     quote! {
@@ -40,6 +59,16 @@ pub fn exti_mod(pac: &Ident, exti_handlers: &[Ident]) -> TokenStream {
             fn try_from(value: #pac::Interrupt) -> Result<Self, Self::Error> {
                 match value {
                     #(#exti_matches)*
+                    _ => Err(value),
+                }
+            }
+        }
+
+        impl TryFrom<Interrupt> for #pac::Interrupt {
+            type Error = Interrupt;
+            fn try_from(value: Interrupt) -> Result<Self, Self::Error> {
+                match value {
+                    #(#swi_matches)*
                     _ => Err(value),
                 }
             }
