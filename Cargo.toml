@@ -1,6 +1,5 @@
 [workspace]
 members = [
     "riscv-slic",
-    "riscv-slic-test",
     "hifive1-test",
 ]
