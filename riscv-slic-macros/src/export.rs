@@ -29,10 +29,9 @@ pub(crate) fn export_exti(pac: &Ident) -> TokenStream {
     }
 }
 
-#[cfg(feature = "exti-plic")]
-pub(crate) fn export_exti(pac: &Ident) -> TokenStream {
+fn common_exti(pac: &Ident) -> TokenStream {
     quote! {
-        use riscv::peripheral::plic::PriorityNumber;
+        use riscv_slic::exti::PriorityNumber;
 
         /// Converts an `u8` to the corresponding priority level.
         /// If conversion fails, it returns the highest available priority level.
@@ -43,11 +42,19 @@ pub(crate) fn export_exti(pac: &Ident) -> TokenStream {
             }
             #pac::Priority::try_from(priority).unwrap()
         }
+    }
+}
+
+#[cfg(feature = "exti-plic")]
+pub(crate) fn export_exti(pac: &Ident) -> TokenStream {
+    let common = common_exti(pac);
+    quote! {
+        #common
 
         #[inline(always)]
         unsafe fn exti_clear() {
             let mut plic = #pac::Peripherals::steal().PLIC;
-            plic.reset()
+            plic.reset();
         }
 
         /// Returns the next pending external interrupt according to the PLIC.

@@ -1,106 +1,156 @@
-use proc_macro::TokenStream;
-use proc_macro2::{Group, Ident, TokenStream as TokenStream2, TokenTree};
-use quote::quote;
+#![no_std]
 
-mod api;
-mod export;
-mod exti;
-mod slic;
-mod swi;
+use heapless::binary_heap::{BinaryHeap, Max};
+pub use riscv;
+pub use riscv_slic_macros::*;
 
-/// Helper function to parse groups as vector of identities
-fn group_to_idents(input: Group) -> Vec<Ident> {
-    let input_iterator = input.stream().into_iter();
-
-    let mut idents: Vec<Ident> = Vec::new();
-    // Even tokens must be interrupt source identifiers, and odd tokens must be commas
-    for (i, token) in input_iterator.enumerate() {
-        if i % 2 == 0 {
-            if let TokenTree::Ident(ident) = token {
-                idents.push(ident);
-                continue;
-            }
-            panic!("invalid input; must be interrupt idents separated by comma");
-        } else {
-            if let TokenTree::Punct(punct) = &token {
-                if punct.as_char() == ',' {
-                    continue;
-                }
-            }
-            panic!("invalid input; must be interrupt idents separated by comma");
-        }
-    }
-    idents
+/// Software interrupt controller
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Debug, Clone)]
+pub struct SLIC<const N: usize> {
+    /// priority threshold. The controller only triggers software
+    /// interrupts if there is a pending interrupt with higher priority.
+    threshold: u8,
+    /// Array with the priorities assigned to each software interrupt source.
+    /// Priority 0 is reserved for "interrupt diabled".
+    priorities: [u8; N],
+    /// Array to check if a software interrupt source is pending.
+    pending: [bool; N],
+    /// Priority queue with pending interrupt sources.
+    queue: BinaryHeap<(u8, u16), Max, N>,
 }
 
-// Ex. codegen!(pac, [HW1, HW2], [SW1, SW2])
-// Ex. codegen!(e310x, [GPIO1, RTC], [Task1, Task2])
-#[proc_macro]
-pub fn codegen(input: TokenStream) -> TokenStream {
-    let input: TokenStream2 = input.into();
-    let mut input_iterator = input.into_iter();
-
-    // Get the device PAC
-    let pac = match input_iterator.next() {
-        Some(TokenTree::Ident(ident)) => Some(ident),
-        _ => None,
-    };
-    let pac = pac.unwrap();
-
-    // Consume the comma separator
-    let separator = match input_iterator.next() {
-        Some(TokenTree::Punct(punct)) => Some(punct.as_char()),
-        _ => None,
-    };
-    assert_eq!(separator.unwrap(), ',');
-    // Get the external interrupt handlers
-    let exti_handlers = match input_iterator.next() {
-        Some(TokenTree::Group(array)) => Some(array),
-        _ => None,
-    };
-    let exti_handlers = group_to_idents(exti_handlers.unwrap());
-
-    // Consume the comma separator
-    let separator = match input_iterator.next() {
-        Some(TokenTree::Punct(punct)) => Some(punct.as_char()),
-        _ => None,
-    };
-    assert_eq!(separator.unwrap(), ',');
-    // Get the sw handlers
-    let swi_handlers = match input_iterator.next() {
-        Some(TokenTree::Group(array)) => Some(array),
-        _ => None,
-    };
-    let swi_handlers = group_to_idents(swi_handlers.unwrap());
-    // Assert that we reached the end
-    assert!(input_iterator.next().is_none());
-
-    let api_code = api::api_mod();
-
-    let exti_export = export::export_exti(&pac);
-    let exti_code = exti::exti_mod(&pac, &exti_handlers);
-
-    // Important: EXTI first for numeration in EXTI clear array!
-    let swi_handlers: Vec<Ident> = [exti_handlers, swi_handlers].concat();
-    assert_ne!(swi_handlers.len(), 0);
-
-    let swi_export = export::export_swi(&pac);
-    let swi_code = swi::swi_mod(&swi_handlers);
-    let slic_code = slic::slic_mod(swi_handlers.len());
-
-    quote! {
-        pub mod slic {
-            use heapless::binary_heap::{BinaryHeap, Max};
-
-            #api_code
-
-            #exti_export
-            #exti_code
-
-            #swi_export
-            #swi_code
-            #slic_code
+impl<const N: usize> SLIC<N> {
+    /// Creates a new software interrupt controller
+    #[inline]
+    pub const fn new() -> Self {
+        Self {
+            threshold: 0,
+            priorities: [0; N],
+            pending: [false; N],
+            queue: BinaryHeap::new(),
         }
     }
-    .into()
+
+    //// Returns current priority threshold.
+    #[inline(always)]
+    pub fn get_threshold(&self) -> u8 {
+        self.threshold
+    }
+
+    /// Sets the priority threshold of the controller.
+    ///
+    /// # Safety
+    ///
+    /// Changing the priority threshold may break priority-based critical sections.
+    #[inline(always)]
+    pub unsafe fn set_threshold(&mut self, priority: u8) {
+        self.threshold = priority;
+    }
+
+    /// Returns the current priority of an interrupt source.
+    #[inline(always)]
+    pub fn get_priority<I: swi::InterruptNumber>(&self, interrupt: I) -> u8 {
+        self.priorities[interrupt.number() as usize]
+    }
+
+    /// Sets the priority of an interrupt source.
+    ///
+    /// # Note
+    ///
+    /// The 0 priority level is reserved for "never interrupt".
+    ///
+    /// Interrupts are queued according to their priority level when queued.
+    /// Thus, if you change the priority of an interrupt while it is already queued,
+    /// the pending interrupt will execute with the previous priority.
+    ///
+    /// # Safety
+    ///
+    /// Changing the priority level of an interrupt may break priority-based critical sections.
+    #[inline(always)]
+    pub unsafe fn set_priority<I: swi::InterruptNumber>(&mut self, interrupt: I, priority: u8) {
+        self.priorities[interrupt.number() as usize] = priority;
+    }
+
+    /// Checks if a given interrupt is pending.
+    #[inline(always)]
+    pub fn is_pending<I: swi::InterruptNumber>(&mut self, interrupt: I) -> bool {
+        self.pending[interrupt.number() as usize]
+    }
+
+    /// Returns `true` if the next queued interrupt can be triggered.
+    #[inline(always)]
+    pub fn is_ready(&self) -> bool {
+        match self.queue.peek() {
+            Some(&(p, _)) => p > self.threshold,
+            None => false,
+        }
+    }
+
+    /// Sets an interrupt source as pending.
+    /// Returns `true` if a software interrupt can be automatically triggered.
+    ///
+    /// # Notes
+    ///
+    /// If interrupt priority is 0 or already pending, this request is silently ignored.
+    #[inline(always)]
+    pub fn pend<I: swi::InterruptNumber>(&mut self, interrupt: I) {
+        let interrupt = interrupt.number();
+        let i = interrupt as usize;
+        if self.priorities[i] == 0 || self.pending[i] {
+            return;
+        }
+        self.pending[i] = true;
+        // SAFETY: we do not allow the same task to be pending more than once
+        unsafe { self.queue.push_unchecked((self.priorities[i], interrupt)) };
+    }
+
+    /// Pops the pending tasks with highest priority.
+    #[inline]
+    pub fn pop(&mut self) -> Option<(u8, u16)> {
+        match self.is_ready() {
+            true => {
+                // SAFETY: we know the queue is not empty
+                let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
+                self.pending[interrupt as usize] = false; //task finishes only after running the handler
+                Some((priority, interrupt))
+            }
+            false => None,
+        }
+    }
+}
+
+pub mod swi {
+    /// Trait for enums of interrupt numbers.
+    ///
+    /// This trait should is automatically generated by the [`riscv_slic_macros::codegen`]
+    /// macro for the enum of available software interrupts.
+    /// Each variant must convert to a `u16` of its interrupt number.
+    ///
+    /// # Safety
+    ///
+    /// This trait must only be implemented on enums of software interrupts. Each
+    /// enum variant must represent a distinct value (no duplicates are permitted),
+    /// and must always return the same value (do not change at runtime).
+    /// All the interrupt numbers must be less than or equal to `MAX_INTERRUPT_NUMBER`.
+    /// `MAX_INTERRUPT_NUMBER` must coincide with the highest allowed interrupt number.
+    ///
+    /// These requirements ensure safe nesting of critical sections.
+    pub unsafe trait InterruptNumber: Copy {
+        /// Highest number assigned to an interrupt source.
+        const MAX_INTERRUPT_NUMBER: u16;
+
+        /// Converts an interrupt source to its corresponding number.
+        fn number(self) -> u16;
+
+        /// Tries to convert a number to a valid interrupt source.
+        /// If the conversion fails, it returns an error with the number back.
+        fn try_from(value: u16) -> Result<Self, u16>;
+    }
+}
+
+#[cfg(any(feature = "exti-plic"))]
+pub mod exti {
+    #[cfg(feature = "exti-plic")]
+    pub use riscv::peripheral::plic::{InterruptNumber, PriorityNumber};
 }

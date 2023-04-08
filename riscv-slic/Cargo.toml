@@ -3,13 +3,11 @@ name = "riscv-slic"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-proc-macro = true
-
 [dependencies]
-proc-macro2 = "1.0"
-quote = "1.0"
+heapless = "0.7.0"
+riscv = {git = "https://github.com/rust-embedded/riscv.git", branch = "peripheral-plic"}
+riscv-slic-macros = {path = "../riscv-slic-macros"}
 
 [features]
-exti-plic = []
-swi-clint = []
+exti-plic = ["riscv-slic-macros/exti-plic"]
+swi-clint = ["riscv-slic-macros/swi-clint"]
