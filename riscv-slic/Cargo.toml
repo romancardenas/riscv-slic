@@ -9,5 +9,5 @@ riscv = {git = "https://github.com/rust-embedded/riscv.git", branch = "periphera
 riscv-slic-macros = {path = "../riscv-slic-macros"}
 
 [features]
-exti-plic = ["riscv-slic-macros/exti-plic"]
+exti-plic = ["riscv-slic-macros/exti-plic", "riscv-plic"]
 swi-clint = ["riscv-slic-macros/swi-clint"]
