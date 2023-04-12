@@ -23,7 +23,7 @@ unsafe fn ClearRTC() {
     sprintln!("clear RTC (rtccmp = {})", rtccmp);
     rtc.rtccmp.write(|w| w.bits(rtccmp + 65536));
     // we also pend the lowest priority SW task before the RTC SW task is automatically pended
-    slic::pend(slic::Interrupt::SoftLow);
+    riscv_slic::pend(slic::Interrupt::SoftLow);
 }
 
 /// SW handler for RTC.

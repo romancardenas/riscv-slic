@@ -6,6 +6,7 @@ mod api;
 mod export;
 mod exti;
 mod swi;
+mod ext;
 
 /// Helper function to parse groups as vector of identities
 fn group_to_idents(input: Group) -> Vec<Ident> {
@@ -74,6 +75,7 @@ pub fn codegen(input: TokenStream) -> TokenStream {
     // Assert that we reached the end
     assert!(input_iterator.next().is_none());
 
+    let ext_code = ext::extern_mod();
     let api_code = api::api_mod();
 
     let exti_export = export::export_exti(&pac);
@@ -88,6 +90,7 @@ pub fn codegen(input: TokenStream) -> TokenStream {
 
     quote! {
         pub mod slic {
+            #ext_code
             #api_code
 
             #exti_export

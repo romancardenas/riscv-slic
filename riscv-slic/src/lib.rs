@@ -20,6 +20,29 @@ pub struct SLIC<const N: usize> {
     queue: BinaryHeap<(u8, u16), Max, N>,
 }
 
+extern "C" {
+    fn __slic_set_threshold(priority: u8);
+    fn __slic_get_threshold() -> u8;
+    fn __slic_pend(interrupt: u16);
+}
+
+#[inline(always)]
+pub unsafe fn set_threshold(priority: u8) {
+    __slic_set_threshold(priority);
+}
+
+#[inline(always)]
+pub fn get_threshold() -> u8 {
+    // SAFETY: it is safe to call get_threshold, as is has
+    // no side effects.
+    unsafe { __slic_get_threshold() }
+}
+
+#[inline(always)]
+pub unsafe fn pend<I: crate::swi::InterruptNumber>(interrupt: I) {
+    __slic_pend(interrupt.number());
+}
+
 impl<const N: usize> SLIC<N> {
     /// Creates a new software interrupt controller
     #[inline]
@@ -30,22 +53,6 @@ impl<const N: usize> SLIC<N> {
             pending: [false; N],
             queue: BinaryHeap::new(),
         }
-    }
-
-    //// Returns current priority threshold.
-    #[inline(always)]
-    pub fn get_threshold(&self) -> u8 {
-        self.threshold
-    }
-
-    /// Sets the priority threshold of the controller.
-    ///
-    /// # Safety
-    ///
-    /// Changing the priority threshold may break priority-based critical sections.
-    #[inline(always)]
-    pub unsafe fn set_threshold(&mut self, priority: u8) {
-        self.threshold = priority;
     }
 
     /// Returns the current priority of an interrupt source.
@@ -70,6 +77,22 @@ impl<const N: usize> SLIC<N> {
     #[inline(always)]
     pub unsafe fn set_priority<I: swi::InterruptNumber>(&mut self, interrupt: I, priority: u8) {
         self.priorities[interrupt.number() as usize] = priority;
+    }
+
+    //// Returns current priority threshold.
+    #[inline(always)]
+    pub fn get_threshold(&self) -> u8 {
+        self.threshold
+    }
+
+    /// Sets the priority threshold of the controller.
+    ///
+    /// # Safety
+    ///
+    /// Changing the priority threshold may break priority-based critical sections.
+    #[inline(always)]
+    pub unsafe fn set_threshold(&mut self, priority: u8) {
+        self.threshold = priority;
     }
 
     /// Checks if a given interrupt is pending.
