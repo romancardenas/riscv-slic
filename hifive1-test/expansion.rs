@@ -2,13 +2,12 @@
 // ======================================
 
 pub mod slic {
-    use heapless::binary_heap::{BinaryHeap, Max};
     #[doc = r" Clears all interrupt flags to avoid interruptions."]
     #[inline(always)]
     pub unsafe fn clear_interrupts() {
-        riscv::register::mstatus::clear_mie();
-        riscv::register::mie::clear_mext();
-        riscv::register::mie::clear_msoft();
+        riscv_slic::riscv::register::mstatus::clear_mie();
+        riscv_slic::riscv::register::mie::clear_mext();
+        riscv_slic::riscv::register::mie::clear_msoft();
         exti_clear();
         swi_clear();
         set_threshold(u8::MAX);
@@ -18,9 +17,14 @@ pub mod slic {
     #[inline(always)]
     pub unsafe fn set_interrupts() {
         set_threshold(0);
-        riscv::register::mstatus::set_mie();
-        riscv::register::mie::set_mext();
-        riscv::register::mie::set_msoft();
+        riscv_slic::riscv::register::mstatus::set_mie();
+        riscv_slic::riscv::register::mie::set_mext();
+        riscv_slic::riscv::register::mie::set_msoft();
+    }
+    #[doc = r" Returns the current priority threshold of the SLIC."]
+    #[inline(always)]
+    pub unsafe fn get_threshold() -> u8 {
+        __SLIC.get_threshold()
     }
     #[doc = r" Sets the priority threshold of the external interrupt controller and the SLIC."]
     #[inline(always)]
@@ -28,42 +32,27 @@ pub mod slic {
         exti_set_threshold(thresh);
         __SLIC.set_threshold(thresh);
     }
+    #[doc = r" Returns the interrupt priority of a given software interrupt source."]
+    #[inline(always)]
+    pub unsafe fn get_priority(interrupt: Interrupt) -> u8 {
+        __SLIC.get_priority(interrupt)
+    }
     #[doc = r" Sets the interrupt priority of a given software interrupt"]
     #[doc = r" source in the external interrupt controller and the SLIC."]
     #[inline(always)]
-    pub unsafe fn set_priority<I>(interrupt: I, priority: u8)
-    where
-        I: TryInto<Interrupt>,
-        <I as TryInto<Interrupt>>::Error: core::fmt::Debug,
-    {
-        let swi: Interrupt = interrupt.try_into().unwrap();
-        __SLIC.set_priority(swi, priority);
-        if let Ok(exti) = swi.try_into() {
+    pub unsafe fn set_priority(interrupt: Interrupt, priority: u8) {
+        __SLIC.set_priority(interrupt, priority);
+        if let Ok(exti) = interrupt.try_into() {
             exti_set_priority(exti, priority);
         }
     }
-    #[doc = r" Returns the current priority threshold of the SLIC."]
-    #[inline(always)]
-    pub unsafe fn get_threshold() -> u8 {
-        __SLIC.get_threshold()
-    }
-    #[doc = r" Returns the interrupt priority of a given software interrupt source."]
-    #[inline(always)]
-    pub unsafe fn get_priority<I>(interrupt: I) -> u8
-    where
-        I: TryInto<Interrupt>,
-        <I as TryInto<Interrupt>>::Error: core::fmt::Debug,
-    {
-        __SLIC.get_priority(interrupt.try_into().unwrap())
-    }
     #[doc = r" Marks a software interrupt as pending."]
     #[inline(always)]
-    pub unsafe fn pend<I>(interrupt: I)
-    where
-        I: TryInto<Interrupt>,
-        <I as TryInto<Interrupt>>::Error: core::fmt::Debug,
-    {
-        __SLIC.pend(interrupt.try_into().unwrap());
+    pub unsafe fn pend(interrupt: Interrupt) {
+        __SLIC.pend(interrupt);
+        if __SLIC.is_ready() {
+            swi_set();
+        }
     }
     #[doc = r" Runs a function with priority mask."]
     #[doc = r""]
@@ -77,7 +66,20 @@ pub mod slic {
         f();
         set_threshold(current);
     }
-    use riscv::peripheral::plic::PriorityNumber;
+    #[doc = r" Runs a function that takes a shared resource with a priority ceiling."]
+    #[doc = r" This function returns the return value of the target function."]
+    #[inline(always)]
+    pub unsafe fn lock<F, T, R>(ptr: *mut T, ceiling: u8, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        let current = get_threshold();
+        set_threshold(ceiling);
+        let r = f(&mut *ptr);
+        set_threshold(current);
+        r
+    }
+    use riscv_slic::exti::PriorityNumber;
     #[doc = r" Converts an `u8` to the corresponding priority level."]
     #[doc = r" If conversion fails, it returns the highest available priority level."]
     #[inline(always)]
@@ -90,7 +92,7 @@ pub mod slic {
     #[inline(always)]
     unsafe fn exti_clear() {
         let mut plic = e310x::Peripherals::steal().PLIC;
-        plic.reset()
+        plic.reset();
     }
     #[doc = r" Returns the next pending external interrupt according to the PLIC."]
     #[doc = r" If no external interrupts are pending, it returns `None`."]
@@ -177,10 +179,12 @@ pub mod slic {
         RTC = 0,
         SoftLow = 1,
     }
-    impl TryFrom<u16> for Interrupt {
-        type Error = u16;
-        #[inline]
-        fn try_from(value: u16) -> Result<Self, Self::Error> {
+    unsafe impl riscv_slic::swi::InterruptNumber for Interrupt {
+        const MAX_INTERRUPT_NUMBER: u16 = 2usize as u16 - 1;
+        fn number(self) -> u16 {
+            self as _
+        }
+        fn try_from(value: u16) -> Result<Self, u16> {
             match value {
                 0 => Ok(Self::RTC),
                 1 => Ok(Self::SoftLow),
@@ -196,121 +200,13 @@ pub mod slic {
     }
     #[no_mangle]
     pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); 2usize] = [RTC, SoftLow];
-    pub static mut __SLIC: SLIC = SLIC::new();
+    pub static mut __SLIC: riscv_slic::SLIC<2usize> = riscv_slic::SLIC::new();
     #[no_mangle]
     #[allow(non_snake_case)]
     pub unsafe fn MachineSoft() {
         swi_clear();
         while let Some((priority, interrupt)) = __SLIC.pop() {
             run(priority, || __SOFTWARE_INTERRUPTS[interrupt as usize]());
-        }
-    }
-    #[doc = r" Software interrupt controller"]
-    #[allow(clippy::upper_case_acronyms)]
-    #[derive(Debug, Clone)]
-    pub struct SLIC {
-        #[doc = r" priority threshold. The controller only triggers software"]
-        #[doc = r" interrupts if there is a pending interrupt with higher priority."]
-        threshold: u8,
-        #[doc = r" Array with the priorities assigned to each software interrupt source."]
-        #[doc = r#" Priority 0 is reserved for "interrupt diabled"."#]
-        priorities: [u8; 2usize],
-        #[doc = r" Array to check if a software interrupt source is pending."]
-        pending: [bool; 2usize],
-        #[doc = r" Priority queue with pending interrupt sources."]
-        queue: BinaryHeap<(u8, u16), Max, 2usize>,
-    }
-    impl SLIC {
-        #[doc = r" Creates a new software interrupt controller"]
-        #[inline]
-        pub const fn new() -> Self {
-            Self {
-                threshold: 0,
-                priorities: [0; 2usize],
-                pending: [false; 2usize],
-                queue: BinaryHeap::new(),
-            }
-        }
-        #[inline(always)]
-        fn get_threshold(&self) -> u8 {
-            self.threshold
-        }
-        #[doc = r" Sets the priority threshold of the controller."]
-        #[doc = r""]
-        #[doc = r" # Safety"]
-        #[doc = r""]
-        #[doc = r" Changing the priority threshold may break priority-based critical sections."]
-        #[inline(always)]
-        unsafe fn set_threshold(&mut self, priority: u8) {
-            self.threshold = priority;
-        }
-        #[doc = r" Returns the current priority of an interrupt source."]
-        #[inline(always)]
-        fn get_priority(&self, interrupt: Interrupt) -> u8 {
-            self.priorities[interrupt as usize]
-        }
-        #[doc = r" Sets the priority of an interrupt source."]
-        #[doc = r""]
-        #[doc = r" # Note"]
-        #[doc = r""]
-        #[doc = r#" The 0 priority level is reserved for "never interrupt"."#]
-        #[doc = r" Thus, when setting priority 0, it also clears the pending flag of the interrupt."]
-        #[doc = r""]
-        #[doc = r" Interrupts are queued according to their priority level when queued."]
-        #[doc = r" Thus, if you change the priority of an interrupt while it is already queued,"]
-        #[doc = r" the pending interrupt will execute with the previous priority."]
-        #[doc = r""]
-        #[doc = r" # Safety"]
-        #[doc = r""]
-        #[doc = r" Changing the priority level of an interrupt may break priority-based critical sections."]
-        #[inline(always)]
-        unsafe fn set_priority(&mut self, interrupt: Interrupt, priority: u8) {
-            self.priorities[interrupt as usize] = priority;
-        }
-        #[doc = r" Checks if a given interrupt is pending."]
-        #[inline(always)]
-        fn is_pending(&mut self, interrupt: Interrupt) -> bool {
-            self.pending[interrupt as usize]
-        }
-        #[doc = r" Returns `true` if the next queued interrupt can be triggered."]
-        #[inline(always)]
-        fn is_ready(&self) -> bool {
-            match self.queue.peek() {
-                Some(&(p, _)) => p > self.threshold,
-                None => false,
-            }
-        }
-        #[doc = r" Sets an interrupt source as pending."]
-        #[doc = r""]
-        #[doc = r" # Notes"]
-        #[doc = r""]
-        #[doc = r" If interrupt priority is 0 or already pending, this request is silently ignored."]
-        #[inline(always)]
-        fn pend(&mut self, interrupt: Interrupt) {
-            let i = interrupt as usize;
-            if self.priorities[i] == 0 || self.pending[i] {
-                return;
-            }
-            self.pending[i] = true;
-            unsafe {
-                self.queue
-                    .push_unchecked((self.priorities[i], interrupt as _))
-            };
-            if self.is_ready() {
-                unsafe { swi_set() };
-            }
-        }
-        #[doc = r" Executes all the pending tasks with high enough priority."]
-        #[inline]
-        fn pop(&mut self) -> Option<(u8, u16)> {
-            match self.is_ready() {
-                true => {
-                    let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
-                    self.pending[interrupt as usize] = false;
-                    Some((priority, interrupt))
-                }
-                false => None,
-            }
         }
     }
 }
