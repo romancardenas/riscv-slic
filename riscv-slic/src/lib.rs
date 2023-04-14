@@ -1,106 +1,45 @@
-use proc_macro::TokenStream;
-use proc_macro2::{Group, Ident, TokenStream as TokenStream2, TokenTree};
-use quote::quote;
+#![no_std]
+
+pub use riscv;
+pub use riscv_slic_macros::*;
 
 mod api;
-mod export;
-mod exti;
 mod slic;
-mod swi;
+pub use api::*;
+pub use slic::SLIC;
 
-/// Helper function to parse groups as vector of identities
-fn group_to_idents(input: Group) -> Vec<Ident> {
-    let input_iterator = input.stream().into_iter();
+pub mod swi {
+    /// Trait for enums of interrupt numbers.
+    ///
+    /// This trait should only be implemented by the [`riscv_slic_macros::codegen`]
+    /// macro for the enum of available software interrupts.
+    /// Each variant must convert to a `u16` of its interrupt number.
+    ///
+    /// # Safety
+    ///
+    /// Do NOT implement this trait. It is left for [`riscv_slic_macros::codegen`].
+    /// This trait must only be implemented on enums of software interrupts. Each
+    /// enum variant must represent a distinct value (no duplicates are permitted),
+    /// and must always return the same value (do not change at runtime).
+    /// All the interrupt numbers must be less than or equal to `MAX_INTERRUPT_NUMBER`.
+    /// `MAX_INTERRUPT_NUMBER` must coincide with the highest allowed interrupt number.
+    ///
+    /// These requirements ensure safe nesting of critical sections.
+    pub unsafe trait InterruptNumber: Copy {
+        /// Highest number assigned to an interrupt source.
+        const MAX_INTERRUPT_NUMBER: u16;
 
-    let mut idents: Vec<Ident> = Vec::new();
-    // Even tokens must be interrupt source identifiers, and odd tokens must be commas
-    for (i, token) in input_iterator.enumerate() {
-        if i % 2 == 0 {
-            if let TokenTree::Ident(ident) = token {
-                idents.push(ident);
-                continue;
-            }
-            panic!("invalid input; must be interrupt idents separated by comma");
-        } else {
-            if let TokenTree::Punct(punct) = &token {
-                if punct.as_char() == ',' {
-                    continue;
-                }
-            }
-            panic!("invalid input; must be interrupt idents separated by comma");
-        }
+        /// Converts an interrupt source to its corresponding number.
+        fn number(self) -> u16;
+
+        /// Tries to convert a number to a valid interrupt source.
+        /// If the conversion fails, it returns an error with the number back.
+        fn try_from(value: u16) -> Result<Self, u16>;
     }
-    idents
 }
 
-// Ex. codegen!(pac, [HW1, HW2], [SW1, SW2])
-// Ex. codegen!(e310x, [GPIO1, RTC], [Task1, Task2])
-#[proc_macro]
-pub fn codegen(input: TokenStream) -> TokenStream {
-    let input: TokenStream2 = input.into();
-    let mut input_iterator = input.into_iter();
-
-    // Get the device PAC
-    let pac = match input_iterator.next() {
-        Some(TokenTree::Ident(ident)) => Some(ident),
-        _ => None,
-    };
-    let pac = pac.unwrap();
-
-    // Consume the comma separator
-    let separator = match input_iterator.next() {
-        Some(TokenTree::Punct(punct)) => Some(punct.as_char()),
-        _ => None,
-    };
-    assert_eq!(separator.unwrap(), ',');
-    // Get the external interrupt handlers
-    let exti_handlers = match input_iterator.next() {
-        Some(TokenTree::Group(array)) => Some(array),
-        _ => None,
-    };
-    let exti_handlers = group_to_idents(exti_handlers.unwrap());
-
-    // Consume the comma separator
-    let separator = match input_iterator.next() {
-        Some(TokenTree::Punct(punct)) => Some(punct.as_char()),
-        _ => None,
-    };
-    assert_eq!(separator.unwrap(), ',');
-    // Get the sw handlers
-    let swi_handlers = match input_iterator.next() {
-        Some(TokenTree::Group(array)) => Some(array),
-        _ => None,
-    };
-    let swi_handlers = group_to_idents(swi_handlers.unwrap());
-    // Assert that we reached the end
-    assert!(input_iterator.next().is_none());
-
-    let api_code = api::api_mod();
-
-    let exti_export = export::export_exti(&pac);
-    let exti_code = exti::exti_mod(&pac, &exti_handlers);
-
-    // Important: EXTI first for numeration in EXTI clear array!
-    let swi_handlers: Vec<Ident> = [exti_handlers, swi_handlers].concat();
-    assert_ne!(swi_handlers.len(), 0);
-
-    let swi_export = export::export_swi(&pac);
-    let swi_code = swi::swi_mod(&swi_handlers);
-    let slic_code = slic::slic_mod(swi_handlers.len());
-
-    quote! {
-        pub mod slic {
-            use heapless::binary_heap::{BinaryHeap, Max};
-
-            #api_code
-
-            #exti_export
-            #exti_code
-
-            #swi_export
-            #swi_code
-            #slic_code
-        }
-    }
-    .into()
+#[cfg(any(feature = "exti-plic"))]
+pub mod exti {
+    #[cfg(feature = "exti-plic")]
+    pub use riscv::peripheral::plic::{InterruptNumber, PriorityNumber};
 }

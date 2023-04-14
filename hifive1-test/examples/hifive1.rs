@@ -11,6 +11,7 @@ use riscv_rt::entry;
 // generate SLIC code for this example, only adding a HW binding for RTC
 // and a purely software SoftLow interrupt
 riscv_slic::codegen!(e310x, [RTC], [SoftLow]);
+use slic::Interrupt; // Re-export of automatically generated enum of interrupts in previous macro
 
 /// HW handler for clearing RTC.
 /// We must define a ClearX handler for every bypassed HW interrupt
@@ -23,7 +24,7 @@ unsafe fn ClearRTC() {
     sprintln!("clear RTC (rtccmp = {})", rtccmp);
     rtc.rtccmp.write(|w| w.bits(rtccmp + 65536));
     // we also pend the lowest priority SW task before the RTC SW task is automatically pended
-    slic::pend(slic::Interrupt::SoftLow);
+    riscv_slic::pend(Interrupt::SoftLow);
 }
 
 /// SW handler for RTC.
@@ -51,7 +52,10 @@ fn main() -> ! {
     let clocks = hifive1::clock::configure(p.PRCI, p.AONCLK, 64.mhz().into());
 
     // make sure that interrupts are off
-    unsafe { slic::clear_interrupts() };
+    unsafe {
+        riscv_slic::disable();
+        riscv_slic::clear_interrupts();
+    };
 
     // Configure UART for stdout
     hifive1::stdout::configure(
@@ -68,8 +72,8 @@ fn main() -> ! {
 
     // Configure SLIC
     unsafe {
-        slic::set_priority(slic::Interrupt::SoftLow, 1); // low priority
-        slic::set_priority(slic::Interrupt::RTC, 2); // high priority
+        riscv_slic::set_priority(Interrupt::SoftLow, 1); // low priority
+        riscv_slic::set_priority(Interrupt::RTC, 2); // high priority
     }
 
     // Configure RTC
@@ -81,7 +85,10 @@ fn main() -> ! {
     rtc.enable();
 
     // activate interrupts
-    unsafe { slic::set_interrupts() };
+    unsafe {
+        riscv_slic::set_interrupts();
+        riscv_slic::enable();
+    };
 
     loop {}
 }

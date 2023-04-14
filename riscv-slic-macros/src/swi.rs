@@ -33,11 +33,14 @@ pub fn swi_mod(swi_handlers: &[Ident]) -> TokenStream {
             #(#swi_enums),*
         }
 
-        impl TryFrom<u16> for Interrupt {
-            type Error = u16;
+        unsafe impl riscv_slic::swi::InterruptNumber for Interrupt {
+            const MAX_INTERRUPT_NUMBER: u16 = #n_interrupts as u16 - 1;
 
-            #[inline]
-            fn try_from(value: u16) -> Result<Self, Self::Error> {
+            fn number(self) -> u16 {
+                self as _
+            }
+
+            fn try_from(value: u16) -> Result<Self, u16> {
                 match value {
                     #(#u16_matches)*
                     _ => Err(value),
@@ -54,14 +57,14 @@ pub fn swi_mod(swi_handlers: &[Ident]) -> TokenStream {
             #(#swi_handlers),*
         ];
 
-        pub static mut __SLIC: SLIC = SLIC::new();
+        pub static mut __SLIC: riscv_slic::SLIC<#n_interrupts> = riscv_slic::SLIC::new();
 
         #[no_mangle]
         #[allow(non_snake_case)]
         pub unsafe fn MachineSoft() {
-            swi_clear(); // We clear it at the beginning to allow nested interrupts
+            swi_clear(); // We clear the interrupt flag at the beginning to allow nested interrupts
             while let Some((priority, interrupt)) = __SLIC.pop() {
-                run(priority, || __SOFTWARE_INTERRUPTS[interrupt as usize]());
+                riscv_slic::run(priority, || __SOFTWARE_INTERRUPTS[interrupt as usize]());
             }
         }
     )
