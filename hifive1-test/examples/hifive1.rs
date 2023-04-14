@@ -52,7 +52,10 @@ fn main() -> ! {
     let clocks = hifive1::clock::configure(p.PRCI, p.AONCLK, 64.mhz().into());
 
     // make sure that interrupts are off
-    unsafe { riscv_slic::clear_interrupts() };
+    unsafe {
+        riscv_slic::disable();
+        riscv_slic::clear_interrupts();
+    };
 
     // Configure UART for stdout
     hifive1::stdout::configure(
@@ -82,7 +85,10 @@ fn main() -> ! {
     rtc.enable();
 
     // activate interrupts
-    unsafe { riscv_slic::set_interrupts() };
+    unsafe {
+        riscv_slic::set_interrupts();
+        riscv_slic::enable();
+    };
 
     loop {}
 }

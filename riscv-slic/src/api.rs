@@ -1,3 +1,6 @@
+pub use riscv::interrupt::{disable, enable};
+use riscv::register::mie;
+
 extern "C" {
     fn __slic_clear();
     fn __slic_set_threshold(priority: u8);
@@ -7,24 +10,33 @@ extern "C" {
     fn __slic_pend(interrupt: u16);
 }
 
-/// Clears all interrupt flags to avoid interruptions.
+/// Clears all external and software interrupt flags to avoid interruptions.
+/// It also resets the software and hardware interrupt controllers.
+///
+/// # Note
+///
+/// This function does not modify the [`riscv::register::mstatus`] register.
+/// If you want to disable ANY interrupt/exception, you ALSO must use the [`disable`] function.
 #[inline(always)]
 pub unsafe fn clear_interrupts() {
-    riscv::register::mstatus::clear_mie();
-    riscv::register::mie::clear_mext();
-    riscv::register::mie::clear_msoft();
+    mie::clear_mext();
+    mie::clear_msoft();
     __slic_clear();
     set_threshold(u8::MAX);
 }
 
 /// Sets all the interrupt flags to allow external and software interrupts.
 /// It also sets the interrupt threshold to 0 (i.e., accept all interrupts).
+///
+/// # Note
+///
+/// This function does not modify the [`riscv::register::mstatus`] register.
+/// If you want to enable ANY interrupt/exception, you ALSO must use the [`enable`] function.
 #[inline(always)]
 pub unsafe fn set_interrupts() {
     set_threshold(0);
-    riscv::register::mstatus::set_mie();
-    riscv::register::mie::set_mext();
-    riscv::register::mie::set_msoft();
+    mie::set_mext();
+    mie::set_msoft();
 }
 
 /// Stabilized API for changing the threshold of the SLIC.
