@@ -91,10 +91,11 @@ pub fn exti_mod(pac: &Ident, exti_handlers: &[Ident]) -> TokenStream {
                 match swi {
                     Ok(swi) => {
                         __CLEAR_EXTERNAL_INTERRUPTS[swi as usize]();
-                        __SLIC.pend(swi);
+                        __slic_pend(swi as u16);
                     },
                     _ => (#pac::__EXTERNAL_INTERRUPTS[exti as usize]._handler)(),
                 }
+
                 unsafe {exti_complete(exti) };
             }
         }
