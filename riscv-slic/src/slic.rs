@@ -1,9 +1,11 @@
 use super::swi::InterruptNumber;
+use atomic_polyfill::{self, AtomicBool};
 use heapless::binary_heap::{BinaryHeap, Max};
+use riscv::_export::critical_section;
 
 /// Software interrupt controller
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SLIC<const N: usize> {
     /// priority threshold. The controller only triggers software
     /// interrupts if there is a pending interrupt with higher priority.
@@ -12,11 +14,12 @@ pub struct SLIC<const N: usize> {
     /// Priority 0 is reserved for "interrupt diabled".
     priorities: [u8; N],
     /// Array to check if a software interrupt source is pending.
-    pending: [bool; N],
+    pending: [AtomicBool; N],
     /// Priority queue with pending interrupt sources.
     queue: BinaryHeap<(u8, u16), Max, N>,
 }
-
+// workaround to statically initializing the pending array
+const ATOMIC_FALSE: AtomicBool = AtomicBool::new(false);
 impl<const N: usize> SLIC<N> {
     /// Creates a new software interrupt controller
     #[inline]
@@ -24,7 +27,7 @@ impl<const N: usize> SLIC<N> {
         Self {
             threshold: 0,
             priorities: [0; N],
-            pending: [false; N],
+            pending: [ATOMIC_FALSE; N],
             queue: BinaryHeap::new(),
         }
     }
@@ -66,13 +69,15 @@ impl<const N: usize> SLIC<N> {
     /// Changing the priority threshold may break priority-based critical sections.
     #[inline(always)]
     pub unsafe fn set_threshold(&mut self, priority: u8) {
-        self.threshold = priority;
+        critical_section::with(|_cs| {
+            self.threshold = priority;
+        });
     }
 
     /// Checks if a given interrupt is pending.
     #[inline(always)]
     pub fn is_pending<I: InterruptNumber>(&mut self, interrupt: I) -> bool {
-        self.pending[interrupt.number() as usize]
+        self.pending[interrupt.number() as usize].load(atomic_polyfill::Ordering::SeqCst)
     }
 
     /// Returns `true` if the next queued interrupt can be triggered.
@@ -94,12 +99,19 @@ impl<const N: usize> SLIC<N> {
     pub fn pend<I: InterruptNumber>(&mut self, interrupt: I) {
         let interrupt = interrupt.number();
         let i = interrupt as usize;
-        if self.priorities[i] == 0 || self.pending[i] {
+        if self.priorities[i] == 0 {
             return;
         }
-        self.pending[i] = true;
-        // SAFETY: we do not allow the same task to be pending more than once
-        unsafe { self.queue.push_unchecked((self.priorities[i], interrupt)) };
+        // set the task to pending and push to the queue if it was not pending beforehand.
+        if let Ok(true) = self.pending[i].compare_exchange(
+            false,
+            true,
+            atomic_polyfill::Ordering::Acquire,
+            atomic_polyfill::Ordering::Relaxed,
+        ) {
+            // SAFETY: we do not allow the same task to be pending more than once
+            unsafe { self.queue.push_unchecked((self.priorities[i], interrupt)) };
+        }
     }
 
     /// Pops the pending tasks with highest priority.
@@ -109,7 +121,7 @@ impl<const N: usize> SLIC<N> {
             true => {
                 // SAFETY: we know the queue is not empty
                 let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
-                self.pending[interrupt as usize] = false; //task finishes only after running the handler
+                self.pending[interrupt as usize].store(false, atomic_polyfill::Ordering::SeqCst); //task finishes only after running the handler
                 Some((priority, interrupt))
             }
             false => None,

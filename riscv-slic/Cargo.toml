@@ -7,6 +7,7 @@ edition = "2021"
 heapless = "0.7.0"
 riscv = {git = "https://github.com/rust-embedded/riscv.git", branch = "peripheral-plic"}
 riscv-slic-macros = {path = "../riscv-slic-macros"}
+atomic-polyfill = "1.0.2"
 
 [features]
 exti-plic = ["riscv-slic-macros/exti-plic", "riscv/plic"]
