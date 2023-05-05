@@ -1,5 +1,6 @@
+
 use super::swi::InterruptNumber;
-use atomic_polyfill::{self, AtomicBool};
+use atomic_polyfill::{self, AtomicBool, AtomicU8};
 use heapless::binary_heap::{BinaryHeap, Max};
 use riscv::_export::critical_section;
 
@@ -9,7 +10,7 @@ use riscv::_export::critical_section;
 pub struct SLIC<const N: usize> {
     /// priority threshold. The controller only triggers software
     /// interrupts if there is a pending interrupt with higher priority.
-    threshold: u8,
+    threshold: AtomicU8,
     /// Array with the priorities assigned to each software interrupt source.
     /// Priority 0 is reserved for "interrupt diabled".
     priorities: [u8; N],
@@ -25,7 +26,7 @@ impl<const N: usize> SLIC<N> {
     #[inline]
     pub const fn new() -> Self {
         Self {
-            threshold: 0,
+            threshold: AtomicU8::new(0),
             priorities: [0; N],
             pending: [ATOMIC_FALSE; N],
             queue: BinaryHeap::new(),
@@ -59,7 +60,7 @@ impl<const N: usize> SLIC<N> {
     //// Returns current priority threshold.
     #[inline(always)]
     pub fn get_threshold(&self) -> u8 {
-        self.threshold
+        self.threshold.load(atomic_polyfill::Ordering::Acquire)
     }
 
     /// Sets the priority threshold of the controller.
@@ -69,22 +70,20 @@ impl<const N: usize> SLIC<N> {
     /// Changing the priority threshold may break priority-based critical sections.
     #[inline(always)]
     pub unsafe fn set_threshold(&mut self, priority: u8) {
-        critical_section::with(|_cs| {
-            self.threshold = priority;
-        });
+        self.threshold.store(priority, atomic_polyfill::Ordering::Release);
     }
 
     /// Checks if a given interrupt is pending.
     #[inline(always)]
     pub fn is_pending<I: InterruptNumber>(&mut self, interrupt: I) -> bool {
-        self.pending[interrupt.number() as usize].load(atomic_polyfill::Ordering::SeqCst)
+        self.pending[interrupt.number() as usize].load(atomic_polyfill::Ordering::Acquire)
     }
 
     /// Returns `true` if the next queued interrupt can be triggered.
     #[inline(always)]
     pub fn is_ready(&self) -> bool {
         match self.queue.peek() {
-            Some(&(p, _)) => p > self.threshold,
+            Some(&(p, _)) => p > self.threshold.load(atomic_polyfill::Ordering::Acquire),
             None => false,
         }
     }
@@ -106,7 +105,7 @@ impl<const N: usize> SLIC<N> {
         if let Ok(true) = self.pending[i].compare_exchange(
             false,
             true,
-            atomic_polyfill::Ordering::Acquire,
+            atomic_polyfill::Ordering::AcqRel,
             atomic_polyfill::Ordering::Relaxed,
         ) {
             // SAFETY: we do not allow the same task to be pending more than once
