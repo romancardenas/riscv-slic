@@ -17,6 +17,7 @@ jobs:
         toolchain:
           - stable
           - nightly
+          - 1.59.0
         target:
           - riscv32i-unknown-none-elf
           - riscv32imc-unknown-none-elf
@@ -27,16 +28,14 @@ jobs:
           - "--no-default-features"
           - "--features=swi-clint"
           - "--features=exti-plic,swi-clint"
-
     steps:
     - uses: actions/checkout@v3
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.toolchain }}
-    - name: Install Rust target
-      run: rustup target install --toolchain=${{ matrix.toolchain }} ${{ matrix.target }} 
-    - name: Install riscv gcc
-      run: sudo apt-get update && sudo apt-get install -y gcc-riscv64-unknown-elf
-    - name: Build
+        targets: ${{ matrix.target }}
+    #- name: Install riscv gcc
+    #  run: sudo apt-get update && sudo apt-get install -y gcc-riscv64-unknown-elf
+    - name: Run Cargo check
       run: cargo check --target ${{ matrix.target }} ${{ matrix.cargo_flags }}
