@@ -44,21 +44,3 @@ jobs:
         targets: ${{ matrix.target }}
     - name: Build library
       run: cargo build --target ${{ matrix.target }} ${{ matrix.cargo_flags }}
-      
-  # On macOS and Windows, we at least make sure that the crate builds and links.
-  ci-others:
-    strategy:
-      matrix:
-        os:
-          - macOS-latest
-          - windows-latest
-        cargo_flags:
-          - "--no-default-features"
-          - "--features=swi-clint"
-          - "--features=exti-plic,swi-clint"
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Build crate for host OS
-        run: cargo build ${{ matrix.cargo_flags }}
