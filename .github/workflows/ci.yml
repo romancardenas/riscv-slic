@@ -34,7 +34,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Install all Rust targets for ${{ matrix.toolchain }}
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: ${{ matrix.toolchain }}
+    - name: Install Rust target
       run: rustup target install --toolchain=${{ matrix.toolchain }} ${{ matrix.target }} 
     - name: Install riscv gcc
       run: sudo apt-get update && sudo apt-get install -y gcc-riscv64-unknown-elf
