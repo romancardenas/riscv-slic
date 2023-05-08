@@ -1,0 +1,42 @@
+name: Continuous integration
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macOS-latest
+        toolchain:
+          - stable
+          - nightly
+        target:
+          - riscv32i-unknown-none-elf
+          - riscv32imc-unknown-none-elf
+          - riscv32imac-unknown-none-elf
+          - riscv64gc-unknown-linux-gnu
+          - riscv64gc-unknown-none-elf
+        cargo_flags:
+          - "--no-default-features"
+          - "--features=swi-clint"
+          - "--features=exti-plic,swi-clint"
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install all Rust targets for ${{ matrix.toolchain }}
+      run: rustup target install --toolchain=${{ matrix.toolchain }} ${{ matrix.target }} 
+    - name: Install riscv gcc
+      run: sudo apt-get update && sudo apt-get install -y gcc-riscv64-unknown-elf
+    - name: Build
+      run: cargo check --target ${{ matrix.target }} --all ${{ matrix.cargo_flags }} -- -D warnings
