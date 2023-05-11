@@ -1,8 +1,6 @@
-
 use super::swi::InterruptNumber;
-use atomic_polyfill::{self, AtomicBool, AtomicU8};
+use atomic_polyfill::{AtomicBool, AtomicU8, Ordering};
 use heapless::binary_heap::{BinaryHeap, Max};
-use riscv::_export::critical_section;
 
 /// Software interrupt controller
 #[allow(clippy::upper_case_acronyms)]
@@ -19,8 +17,11 @@ pub struct SLIC<const N: usize> {
     /// Priority queue with pending interrupt sources.
     queue: BinaryHeap<(u8, u16), Max, N>,
 }
-// workaround to statically initializing the pending array
-const ATOMIC_FALSE: AtomicBool = AtomicBool::new(false);
+
+// Hack to create an array of atomic booleans statically.
+#[allow(clippy::declare_interior_mutable_const)]
+const DEFAULT_ATOMIC: AtomicBool = AtomicBool::new(false);
+
 impl<const N: usize> SLIC<N> {
     /// Creates a new software interrupt controller
     #[inline]
@@ -28,7 +29,7 @@ impl<const N: usize> SLIC<N> {
         Self {
             threshold: AtomicU8::new(0),
             priorities: [0; N],
-            pending: [ATOMIC_FALSE; N],
+            pending: [DEFAULT_ATOMIC; N],
             queue: BinaryHeap::new(),
         }
     }
@@ -60,7 +61,7 @@ impl<const N: usize> SLIC<N> {
     //// Returns current priority threshold.
     #[inline(always)]
     pub fn get_threshold(&self) -> u8 {
-        self.threshold.load(atomic_polyfill::Ordering::Acquire)
+        self.threshold.load(Ordering::Acquire)
     }
 
     /// Sets the priority threshold of the controller.
@@ -70,20 +71,20 @@ impl<const N: usize> SLIC<N> {
     /// Changing the priority threshold may break priority-based critical sections.
     #[inline(always)]
     pub unsafe fn set_threshold(&mut self, priority: u8) {
-        self.threshold.store(priority, atomic_polyfill::Ordering::Release);
+        self.threshold.store(priority, Ordering::Release);
     }
 
     /// Checks if a given interrupt is pending.
     #[inline(always)]
     pub fn is_pending<I: InterruptNumber>(&mut self, interrupt: I) -> bool {
-        self.pending[interrupt.number() as usize].load(atomic_polyfill::Ordering::Acquire)
+        self.pending[interrupt.number() as usize].load(Ordering::Acquire)
     }
 
     /// Returns `true` if the next queued interrupt can be triggered.
     #[inline(always)]
     pub fn is_ready(&self) -> bool {
         match self.queue.peek() {
-            Some(&(p, _)) => p > self.threshold.load(atomic_polyfill::Ordering::Acquire),
+            Some(&(p, _)) => p > self.threshold.load(Ordering::Acquire),
             None => false,
         }
     }
@@ -102,12 +103,9 @@ impl<const N: usize> SLIC<N> {
             return;
         }
         // set the task to pending and push to the queue if it was not pending beforehand.
-        if let Ok(true) = self.pending[i].compare_exchange(
-            false,
-            true,
-            atomic_polyfill::Ordering::AcqRel,
-            atomic_polyfill::Ordering::Relaxed,
-        ) {
+        if let Ok(true) =
+            self.pending[i].compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+        {
             // SAFETY: we do not allow the same task to be pending more than once
             unsafe { self.queue.push_unchecked((self.priorities[i], interrupt)) };
         }
@@ -120,7 +118,7 @@ impl<const N: usize> SLIC<N> {
             true => {
                 // SAFETY: we know the queue is not empty
                 let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
-                self.pending[interrupt as usize].store(false, atomic_polyfill::Ordering::SeqCst); //task finishes only after running the handler
+                self.pending[interrupt as usize].store(false, Ordering::SeqCst);
                 Some((priority, interrupt))
             }
             false => None,
