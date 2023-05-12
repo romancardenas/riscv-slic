@@ -103,7 +103,8 @@ impl<const N: usize> SLIC<N> {
             return;
         }
         // set the task to pending and push to the queue if it was not pending beforehand.
-        if let Ok(true) =
+        // TODO compare_exchange returns the PREVIOUS value!
+        if let Ok(false) =
             self.pending[i].compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
         {
             // SAFETY: we do not allow the same task to be pending more than once
@@ -118,6 +119,7 @@ impl<const N: usize> SLIC<N> {
             true => {
                 // SAFETY: we know the queue is not empty
                 let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
+                // TODO maybe compare_exchange to make sure that it was pending?
                 self.pending[interrupt as usize].store(false, Ordering::SeqCst);
                 Some((priority, interrupt))
             }
