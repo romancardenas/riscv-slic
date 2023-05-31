@@ -45,26 +45,26 @@ pub fn codegen(input: TokenStream) -> TokenStream {
         _ => None,
     };
     let pac = pac.unwrap();
-
     // Consume the comma separator
     let separator = match input_iterator.next() {
         Some(TokenTree::Punct(punct)) => Some(punct.as_char()),
         _ => None,
     };
     assert_eq!(separator.unwrap(), ',');
+
     // Get the external interrupt handlers
     let exti_handlers = match input_iterator.next() {
         Some(TokenTree::Group(array)) => Some(array),
         _ => None,
     };
     let exti_handlers = group_to_idents(exti_handlers.unwrap());
-
     // Consume the comma separator
     let separator = match input_iterator.next() {
         Some(TokenTree::Punct(punct)) => Some(punct.as_char()),
         _ => None,
     };
     assert_eq!(separator.unwrap(), ',');
+
     // Get the sw handlers
     let swi_handlers = match input_iterator.next() {
         Some(TokenTree::Group(array)) => Some(array),

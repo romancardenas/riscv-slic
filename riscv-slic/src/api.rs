@@ -17,6 +17,10 @@ extern "C" {
 ///
 /// This function does not modify the [`riscv::register::mstatus`] register.
 /// If you want to disable ANY interrupt/exception, you ALSO must use the [`disable`] function.
+///
+/// # Safety
+///
+/// To do.
 #[inline(always)]
 pub unsafe fn clear_interrupts() {
     mie::clear_mext();
@@ -32,6 +36,10 @@ pub unsafe fn clear_interrupts() {
 ///
 /// This function does not modify the [`riscv::register::mstatus`] register.
 /// If you want to enable ANY interrupt/exception, you ALSO must use the [`enable`] function.
+///
+/// # Safety
+///
+/// To do.
 #[inline(always)]
 pub unsafe fn set_interrupts() {
     set_threshold(0);

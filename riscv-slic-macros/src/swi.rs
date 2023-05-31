@@ -22,8 +22,8 @@ fn u16_to_swi(input: &[Ident]) -> Vec<TokenStream> {
 /// Creates the SLIC module with the proper interrupt sources.
 pub fn swi_mod(swi_handlers: &[Ident]) -> TokenStream {
     let n_interrupts = swi_handlers.len();
-    let swi_enums = interrupts_enum(&swi_handlers);
-    let u16_matches = u16_to_swi(&swi_handlers);
+    let swi_enums = interrupts_enum(swi_handlers);
+    let u16_matches = u16_to_swi(swi_handlers);
 
     quote!(
         /// Enumeration of software interrupts
