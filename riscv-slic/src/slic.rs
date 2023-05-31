@@ -90,7 +90,6 @@ impl<const N: usize> SLIC<N> {
     }
 
     /// Sets an interrupt source as pending.
-    /// Returns `true` if a software interrupt can be automatically triggered.
     ///
     /// # Notes
     ///
@@ -103,7 +102,6 @@ impl<const N: usize> SLIC<N> {
             return;
         }
         // set the task to pending and push to the queue if it was not pending beforehand.
-        // TODO compare_exchange returns the PREVIOUS value!
         if let Ok(false) =
             self.pending[i].compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
         {
@@ -113,17 +111,20 @@ impl<const N: usize> SLIC<N> {
     }
 
     /// Pops the pending tasks with highest priority.
-    #[inline]
+    #[inline(always)]
     pub fn pop(&mut self) -> Option<(u8, u16)> {
-        match self.is_ready() {
-            true => {
-                // SAFETY: we know the queue is not empty
-                let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
-                // TODO maybe compare_exchange to make sure that it was pending?
-                self.pending[interrupt as usize].store(false, Ordering::SeqCst);
-                Some((priority, interrupt))
+        while self.is_ready() {
+            if let Some((priority, interrupt)) = self.queue.pop() {
+                if let Ok(true) = self.pending[interrupt as usize].compare_exchange(
+                    true,
+                    false,
+                    Ordering::AcqRel,
+                    Ordering::Relaxed,
+                ) {
+                    return Some((priority, interrupt));
+                }
             }
-            false => None,
         }
+        None
     }
 }
