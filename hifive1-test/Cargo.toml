@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-riscv-slic = {path = "../riscv-slic", features = ["exti-plic", "swi-clint"]}
+riscv-slic = {path = "../riscv-slic", features = ["exti-plic", "swi-clint", "force-atomic-polyfill"]}
 e310x = { git = "https://github.com/greenlsi/e310x.git", branch = "master", features = ["rt"]}
 hifive1 = { git = "https://github.com/romancardenas/hifive1.git", features = ["board-redv"] }
 bare-metal = "0.2"
