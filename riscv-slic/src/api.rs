@@ -47,6 +47,25 @@ pub unsafe fn set_interrupts() {
     mie::set_msoft();
 }
 
+/// Utility function to call an ISR while enabling nested interrupts.
+/// Source: https://www.five-embeddev.com/code/2022/06/29/nested-interrupts/
+pub unsafe fn nested_isr(f: impl FnOnce()) {
+    // store mstatus and mepc
+    let mstatus = riscv::register::mstatus::read();
+    let mepc = riscv::register::mepc::read();
+
+    riscv::register::mstatus::set_mie(); // re-enable interrupts
+    f(); // call the ISR
+    riscv::register::mstatus::clear_mie(); // disable interrupts
+
+    // restore mstatus and mepc
+    if mstatus.mpie() {
+        riscv::register::mstatus::set_mpie();
+    }
+    riscv::register::mstatus::set_mpp(mstatus.mpp());
+    riscv::register::mepc::write(mepc);
+}
+
 /// Stabilized API for changing the threshold of the SLIC.
 ///
 /// # Safety

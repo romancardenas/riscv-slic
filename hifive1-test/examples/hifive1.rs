@@ -10,7 +10,7 @@ use riscv_rt::entry;
 
 // generate SLIC code for this example, only adding a HW binding for RTC
 // and a purely software SoftLow interrupt
-riscv_slic::codegen!(e310x, [RTC], [SoftLow]);
+riscv_slic::codegen!(e310x, [RTC], [SoftLow, SoftHigh]);
 use slic::Interrupt; // Re-export of automatically generated enum of interrupts in previous macro
 
 /// HW handler for clearing RTC.
@@ -18,13 +18,12 @@ use slic::Interrupt; // Re-export of automatically generated enum of interrupts 
 #[allow(non_snake_case)]
 #[no_mangle]
 unsafe fn ClearRTC() {
+    sprintln!("!start ClearRTC");
     // increase rtccmp to clear HW interrupt
     let rtc = DeviceResources::steal().peripherals.RTC;
     let rtccmp = rtc.rtccmp.read().bits();
-    sprintln!("clear RTC (rtccmp = {})", rtccmp);
-    rtc.rtccmp.write(|w| w.bits(rtccmp + 65536));
-    // we also pend the lowest priority SW task before the RTC SW task is automatically pended
-    riscv_slic::pend(Interrupt::SoftLow);
+    rtc.rtccmp.write(|w| w.bits(rtccmp + 65536 * 2));
+    sprintln!("!stop ClearRTC (rtccmp = {})", rtccmp);
 }
 
 /// SW handler for RTC.
@@ -32,14 +31,27 @@ unsafe fn ClearRTC() {
 #[allow(non_snake_case)]
 #[no_mangle]
 unsafe fn RTC() {
-    sprintln!("software RTC");
+    sprintln!("  start RTC");
+    riscv_slic::pend(Interrupt::SoftLow);
+    sprintln!("  middle RTC");
+    riscv_slic::pend(Interrupt::SoftHigh);
+    sprintln!("  stop RTC");
 }
 
 /// SW handler for SoftLow (low priority task with no HW binding).
 #[allow(non_snake_case)]
 #[no_mangle]
 unsafe fn SoftLow() {
-    sprintln!("software SoftLow");
+    sprintln!("start SoftLow");
+    sprintln!("stop SoftLow");
+}
+
+/// SW handler for SoftHigh (high priority task with no HW binding).
+#[allow(non_snake_case)]
+#[no_mangle]
+unsafe fn SoftHigh() {
+    sprintln!("    start SoftHigh");
+    sprintln!("    stop SoftHigh");
 }
 
 #[entry]
@@ -73,7 +85,8 @@ fn main() -> ! {
     // Configure SLIC
     unsafe {
         riscv_slic::set_priority(Interrupt::SoftLow, 1); // low priority
-        riscv_slic::set_priority(Interrupt::RTC, 2); // high priority
+        riscv_slic::set_priority(Interrupt::RTC, 2); // medium priority
+        riscv_slic::set_priority(Interrupt::SoftHigh, 3); // high priority
     }
 
     // Configure RTC

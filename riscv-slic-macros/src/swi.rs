@@ -62,10 +62,12 @@ pub fn swi_mod(swi_handlers: &[Ident]) -> TokenStream {
         #[no_mangle]
         #[allow(non_snake_case)]
         pub unsafe fn MachineSoft() {
-            swi_clear(); // We clear the interrupt flag at the beginning to allow nested interrupts
-            while let Some((priority, interrupt)) = __SLIC.pop() {
-                riscv_slic::run(priority, || __SOFTWARE_INTERRUPTS[interrupt as usize]());
-            }
+            swi_clear(); // We clear the software interrupt flag to allow nested interrupts
+            riscv_slic::nested_isr(|| {
+                while let Some((priority, interrupt)) = __SLIC.pop() {
+                    riscv_slic::run(priority, || __SOFTWARE_INTERRUPTS[interrupt as usize]());
+                }
+            });
         }
     )
 }
