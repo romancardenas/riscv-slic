@@ -8,6 +8,8 @@ use hifive1::hal::DeviceResources;
 use hifive1::{pin, sprintln};
 use riscv_rt::entry;
 
+use riscv_slic;
+
 // generate SLIC code for this example, only adding a HW binding for RTC
 // and a purely software SoftLow interrupt
 riscv_slic::codegen!(e310x, [RTC], [SoftLow, SoftHigh]);
@@ -18,12 +20,14 @@ use slic::Interrupt; // Re-export of automatically generated enum of interrupts 
 #[allow(non_snake_case)]
 #[no_mangle]
 unsafe fn ClearRTC() {
+    sprintln!("-------------------");
     sprintln!("!start ClearRTC");
     // increase rtccmp to clear HW interrupt
     let rtc = DeviceResources::steal().peripherals.RTC;
     let rtccmp = rtc.rtccmp.read().bits();
     rtc.rtccmp.write(|w| w.bits(rtccmp + 65536 * 2));
     sprintln!("!stop ClearRTC (rtccmp = {})", rtccmp);
+    sprintln!("-------------------");
 }
 
 /// SW handler for RTC.
@@ -33,7 +37,7 @@ unsafe fn ClearRTC() {
 unsafe fn RTC() {
     sprintln!("  start RTC");
     riscv_slic::pend(Interrupt::SoftLow);
-    sprintln!("  middle RTC");
+    // sprintln!("  middle RTC");
     riscv_slic::pend(Interrupt::SoftHigh);
     sprintln!("  stop RTC");
 }

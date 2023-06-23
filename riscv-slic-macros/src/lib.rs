@@ -88,6 +88,8 @@ pub fn codegen(input: TokenStream) -> TokenStream {
 
     quote! {
         pub mod slic {
+            use super::riscv_slic;
+
             #api_code
 
             #exti_export
