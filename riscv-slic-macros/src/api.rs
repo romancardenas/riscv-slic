@@ -26,6 +26,10 @@ pub fn api_mod() -> TokenStream {
         pub unsafe fn __slic_set_threshold(thresh: u8) {
             exti_set_threshold(thresh);
             __SLIC.set_threshold(thresh);
+            // check if we need to trigger a software interrupt after changing the threshold
+            if __SLIC.is_ready() {
+                swi_set();
+            }
         }
 
         /// Returns the interrupt priority of a given software interrupt source.
