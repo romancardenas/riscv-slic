@@ -1,6 +1,6 @@
-use super::swi::InterruptNumber;
-use atomic_polyfill::{AtomicBool, AtomicU8, Ordering};
+use crate::InterruptNumber;
 use heapless::binary_heap::{BinaryHeap, Max};
+use portable_atomic::{AtomicBool, AtomicU8, Ordering};
 
 /// Software interrupt controller
 #[allow(clippy::upper_case_acronyms)]
@@ -35,7 +35,7 @@ impl<const N: usize> SLIC<N> {
     }
 
     /// Returns the current priority of an interrupt source.
-    #[inline(always)]
+    #[inline]
     pub fn get_priority<I: InterruptNumber>(&self, interrupt: I) -> u8 {
         self.priorities[interrupt.number() as usize]
     }
@@ -53,13 +53,13 @@ impl<const N: usize> SLIC<N> {
     /// # Safety
     ///
     /// Changing the priority level of an interrupt may break priority-based critical sections.
-    #[inline(always)]
+    #[inline]
     pub unsafe fn set_priority<I: InterruptNumber>(&mut self, interrupt: I, priority: u8) {
         self.priorities[interrupt.number() as usize] = priority;
     }
 
     //// Returns current priority threshold.
-    #[inline(always)]
+    #[inline]
     pub fn get_threshold(&self) -> u8 {
         self.threshold.load(Ordering::Acquire)
     }
@@ -69,19 +69,19 @@ impl<const N: usize> SLIC<N> {
     /// # Safety
     ///
     /// Changing the priority threshold may break priority-based critical sections.
-    #[inline(always)]
+    #[inline]
     pub unsafe fn set_threshold(&mut self, priority: u8) {
         self.threshold.store(priority, Ordering::Release);
     }
 
     /// Checks if a given interrupt is pending.
-    #[inline(always)]
+    #[inline]
     pub fn is_pending<I: InterruptNumber>(&mut self, interrupt: I) -> bool {
         self.pending[interrupt.number() as usize].load(Ordering::Acquire)
     }
 
     /// Returns `true` if the next queued interrupt can be triggered.
-    #[inline(always)]
+    #[inline]
     pub fn is_ready(&self) -> bool {
         match self.queue.peek() {
             Some(&(p, _)) => p > self.threshold.load(Ordering::Acquire),
@@ -94,7 +94,7 @@ impl<const N: usize> SLIC<N> {
     /// # Notes
     ///
     /// If interrupt priority is 0 or already pending, this request is silently ignored.
-    #[inline(always)]
+    #[inline]
     pub fn pend<I: InterruptNumber>(&mut self, interrupt: I) {
         let interrupt = interrupt.number();
         let i = interrupt as usize;
@@ -111,7 +111,7 @@ impl<const N: usize> SLIC<N> {
     }
 
     /// Pops the pending tasks with highest priority.
-    #[inline(always)]
+    #[inline]
     pub fn pop(&mut self) -> Option<(u8, u16)> {
         while self.is_ready() {
             if let Some((priority, interrupt)) = self.queue.pop() {

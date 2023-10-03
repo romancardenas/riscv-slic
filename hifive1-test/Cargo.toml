@@ -6,9 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-riscv-slic = {path = "../riscv-slic", features = ["exti-plic", "swi-clint", "force-atomic-polyfill"]}
-e310x = { git = "https://github.com/greenlsi/e310x.git", branch = "master", features = ["rt"]}
-hifive1 = { git = "https://github.com/romancardenas/hifive1.git", features = ["board-redv"] }
+riscv-slic = {path = "../riscv-slic", features = ["clint-backend", "unsafe-assume-single-core"]} # for imc
+# riscv-slic = {path = "../riscv-slic", features = ["clint-backend"]} # for imac
+e310x = { git = "https://github.com/greenlsi/e310x.git", branch = "master", features = ["v-extern"]}
+hifive1 = { git = "https://github.com/greenlsi/hifive1.git", branch = "rtc", features = ["board-redv"] }
 bare-metal = "0.2"
-riscv-rt = "0.11.0"
+# riscv-rt = "0.11.0"
+riscv-rt = {git = "https://github.com/rust-embedded/riscv-rt.git", branch = "master"}
+# riscv-rt = {path = "../../../github/riscv-rt", features = ["atomic-emulation-trap"]}
 panic-halt = "0.2.0"

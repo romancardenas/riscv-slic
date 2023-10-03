@@ -1,3 +1,4 @@
+use crate::input::CodegenInput;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 
@@ -10,20 +11,21 @@ fn interrupts_enum(input: &[Ident]) -> Vec<TokenStream> {
         .collect()
 }
 
-/// Helper function for the [`TryFrom`] trait from [`u16`] to software interrupts.
-fn u16_to_swi(input: &[Ident]) -> Vec<TokenStream> {
-    input
-        .iter()
-        .enumerate()
-        .map(|(i, interrupt)| format!("{i} => Ok(Self::{interrupt}),").parse().unwrap())
-        .collect()
+fn swi_handler_signature() -> TokenStream {
+    match () {
+        #[cfg(feature = "msoft")]
+        () => "MachineSoft".parse().unwrap(),
+        #[cfg(feature = "ssoft")]
+        () => "SupervisorSoft".parse().unwrap(),
+    }
 }
 
 /// Creates the SLIC module with the proper interrupt sources.
-pub fn swi_mod(swi_handlers: &[Ident]) -> TokenStream {
+pub fn swi_mod(input: &CodegenInput) -> TokenStream {
+    let swi_handlers = &input.swi_handlers;
     let n_interrupts = swi_handlers.len();
     let swi_enums = interrupts_enum(swi_handlers);
-    let u16_matches = u16_to_swi(swi_handlers);
+    let swi_handler_signature = swi_handler_signature();
 
     quote!(
         /// Enumeration of software interrupts
@@ -33,7 +35,7 @@ pub fn swi_mod(swi_handlers: &[Ident]) -> TokenStream {
             #(#swi_enums),*
         }
 
-        unsafe impl riscv_slic::swi::InterruptNumber for Interrupt {
+        unsafe impl riscv_slic::InterruptNumber for Interrupt {
             const MAX_INTERRUPT_NUMBER: u16 = #n_interrupts as u16 - 1;
 
             fn number(self) -> u16 {
@@ -41,9 +43,11 @@ pub fn swi_mod(swi_handlers: &[Ident]) -> TokenStream {
             }
 
             fn try_from(value: u16) -> Result<Self, u16> {
-                match value {
-                    #(#u16_matches)*
-                    _ => Err(value),
+                if value > Self::MAX_INTERRUPT_NUMBER {
+                    Err(value)
+                } else {
+                    // SAFETY: the value is less than the maximum interrupt number
+                    Ok(unsafe { core::mem::transmute(value) })
                 }
             }
         }
@@ -61,8 +65,8 @@ pub fn swi_mod(swi_handlers: &[Ident]) -> TokenStream {
 
         #[no_mangle]
         #[allow(non_snake_case)]
-        pub unsafe fn MachineSoft() {
-            swi_clear(); // We clear the software interrupt flag to allow nested interrupts
+        pub unsafe fn #swi_handler_signature() {
+            export_swi_clear(); // We clear the software interrupt flag to allow nested interrupts
             riscv_slic::nested_isr(|| {
                 while let Some((priority, interrupt)) = __SLIC.pop() {
                     riscv_slic::run(priority, || __SOFTWARE_INTERRUPTS[interrupt as usize]());

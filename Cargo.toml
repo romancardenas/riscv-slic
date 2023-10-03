@@ -4,3 +4,4 @@ members = [
     "riscv-slic-macros",
     "hifive1-test",
 ]
+resolver = "2"
