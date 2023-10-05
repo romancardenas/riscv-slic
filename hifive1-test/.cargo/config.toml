@@ -1,4 +1,4 @@
-[target.'cfg(all(target_arch = "riscv32", target_os = "none"))']
+[target.'cfg(all(any(target_arch = "riscv32", target_arch = "riscv64"), target_os = "none"))']
 runner = "../../../toolchains/sifive/bin/riscv64-unknown-elf-gdb -q -x gdb_init"
 # runner = "probe-run --chip fe310-g002 --verbose"
 rustflags = [
