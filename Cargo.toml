@@ -4,4 +4,8 @@ members = [
     "riscv-slic-macros",
     "hifive1-test",
 ]
+default-memers = [
+    "riscv-slic",
+    "riscv-slic-macros",
+]
 resolver = "2"
