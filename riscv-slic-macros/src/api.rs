@@ -34,7 +34,6 @@ pub fn api_mod() -> TokenStream {
         #[inline]
         #[no_mangle]
         pub unsafe fn __slic_get_priority(interrupt: u16) -> u8 {
-            let interrupt: Interrupt = InterruptNumber::try_from(interrupt).unwrap();
             __SLIC.get_priority(interrupt)
         }
 
@@ -43,7 +42,6 @@ pub fn api_mod() -> TokenStream {
         #[inline]
         #[no_mangle]
         pub unsafe fn __slic_set_priority(interrupt: u16, priority: u8) {
-            let interrupt: Interrupt = InterruptNumber::try_from(interrupt).unwrap();
             __SLIC.set_priority(interrupt, priority);
         }
 
@@ -51,7 +49,6 @@ pub fn api_mod() -> TokenStream {
         #[inline]
         #[no_mangle]
         pub unsafe fn __slic_pend(interrupt: u16) {
-            let interrupt: Interrupt = InterruptNumber::try_from(interrupt).unwrap();
             __SLIC.pend(interrupt);
             if __SLIC.is_ready() {
                 export_swi_set();

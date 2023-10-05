@@ -19,15 +19,8 @@ jobs:
         - stable
         - nightly
         - 1.59.0
-        target:
-          - x86_64-unknown-linux-gnu
-          - riscv32i-unknown-none-elf
-          - riscv32imc-unknown-none-elf
-          - riscv32imac-unknown-none-elf
-          - riscv64gc-unknown-linux-gnu
-          - riscv64gc-unknown-none-elf
         cargo_flags:
-          - "--features=clint-backend,unsafe-assume-single-core"
+          - "clint-backend"
         include:
           # Nightly is only for reference and allowed to fail
           - rust: nightly
@@ -39,6 +32,12 @@ jobs:
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.toolchain }}
-        targets: ${{ matrix.target }}
-    - name: Build library
-      run: cargo build --target ${{ matrix.target }} ${{ matrix.cargo_flags }}
+        targets: riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf,riscv64gc-unknown-none-elf
+    - name: Build riscv32i-unknown-none-elf
+      run: cargo build --target riscv32i-unknown-none-elf --features=${{ matrix.cargo_flags }},unsafe-assume-single-core
+    - name: Build riscv32imc-unknown-none-elf
+      run: cargo build --target riscv32imc-unknown-none-elf--features=${{ matrix.cargo_flags }},unsafe-assume-single-core
+    - name: Build riscv32imac-unknown-none-elf
+      run: cargo build --target riscv32imac-unknown-none-elf--features=${{ matrix.cargo_flags }}
+    - name: Build riscv64gc-unknown-none-elf
+      run: cargo build --target riscv64gc-unknown-none-elf--features=${{ matrix.cargo_flags }}

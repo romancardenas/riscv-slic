@@ -1,4 +1,3 @@
-use crate::InterruptNumber;
 use heapless::binary_heap::{BinaryHeap, Max};
 use portable_atomic::{AtomicBool, AtomicU8, Ordering};
 
@@ -36,8 +35,8 @@ impl<const N: usize> SLIC<N> {
 
     /// Returns the current priority of an interrupt source.
     #[inline]
-    pub fn get_priority<I: InterruptNumber>(&self, interrupt: I) -> u8 {
-        self.priorities[interrupt.number() as usize]
+    pub fn get_priority(&self, interrupt: u16) -> u8 {
+        self.priorities[interrupt as usize]
     }
 
     /// Sets the priority of an interrupt source.
@@ -54,8 +53,8 @@ impl<const N: usize> SLIC<N> {
     ///
     /// Changing the priority level of an interrupt may break priority-based critical sections.
     #[inline]
-    pub unsafe fn set_priority<I: InterruptNumber>(&mut self, interrupt: I, priority: u8) {
-        self.priorities[interrupt.number() as usize] = priority;
+    pub unsafe fn set_priority(&mut self, interrupt: u16, priority: u8) {
+        self.priorities[interrupt as usize] = priority;
     }
 
     //// Returns current priority threshold.
@@ -76,8 +75,8 @@ impl<const N: usize> SLIC<N> {
 
     /// Checks if a given interrupt is pending.
     #[inline]
-    pub fn is_pending<I: InterruptNumber>(&mut self, interrupt: I) -> bool {
-        self.pending[interrupt.number() as usize].load(Ordering::Acquire)
+    pub fn is_pending(&mut self, interrupt: u16) -> bool {
+        self.pending[interrupt as usize].load(Ordering::Acquire)
     }
 
     /// Returns `true` if the next queued interrupt can be triggered.
@@ -95,8 +94,7 @@ impl<const N: usize> SLIC<N> {
     ///
     /// If interrupt priority is 0 or already pending, this request is silently ignored.
     #[inline]
-    pub fn pend<I: InterruptNumber>(&mut self, interrupt: I) {
-        let interrupt = interrupt.number();
+    pub fn pend(&mut self, interrupt: u16) {
         let i = interrupt as usize;
         if self.priorities[i] == 0 {
             return;

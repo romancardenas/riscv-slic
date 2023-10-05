@@ -34,5 +34,5 @@ pub unsafe trait InterruptNumber: Copy {
 
     /// Tries to convert a number to a valid interrupt source.
     /// If the conversion fails, it returns an error with the number back.
-    fn try_from(value: u16) -> Result<Self, u16>;
+    fn from_number(value: u16) -> Result<Self, u16>;
 }

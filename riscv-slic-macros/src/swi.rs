@@ -42,7 +42,7 @@ pub fn swi_mod(input: &CodegenInput) -> TokenStream {
                 self as _
             }
 
-            fn try_from(value: u16) -> Result<Self, u16> {
+            fn from_number(value: u16) -> Result<Self, u16> {
                 if value > Self::MAX_INTERRUPT_NUMBER {
                     Err(value)
                 } else {
