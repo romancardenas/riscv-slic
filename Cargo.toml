@@ -4,7 +4,7 @@ members = [
     "riscv-slic-macros",
     "hifive1-test",
 ]
-default-memers = [
+default-members = [
     "riscv-slic",
     "riscv-slic-macros",
 ]
