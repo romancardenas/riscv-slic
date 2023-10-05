@@ -34,10 +34,10 @@ jobs:
         toolchain: ${{ matrix.toolchain }}
         targets: riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf,riscv64gc-unknown-none-elf
     - name: Build riscv32i-unknown-none-elf
-      run: RUSTFLAGS="-C link-arg=-Thifive1-link.x" cargo build --target riscv32i-unknown-none-elf --features=${{ matrix.cargo_flags }},unsafe-assume-single-core
+      run: RUSTFLAGS="-C link-arg=-Thifive1-link.x" cargo build --workspace --target riscv32i-unknown-none-elf --features=${{ matrix.cargo_flags }},unsafe-assume-single-core
     - name: Build riscv32imc-unknown-none-elf
-      run: RUSTFLAGS="-C link-arg=-Thifive1-link.x" cargo build --target riscv32imc-unknown-none-elf --features=${{ matrix.cargo_flags }},unsafe-assume-single-core
-    - name: Build riscv32imac-unknown-none-elf
-      run: RUSTFLAGS="-C link-arg=-Thifive1-link.x" cargo build --target riscv32imac-unknown-none-elf --features=${{ matrix.cargo_flags }}
-    - name: Build riscv64gc-unknown-none-elf
-      run: RUSTFLAGS="-C link-arg=-Thifive1-link.x" cargo build --target riscv64gc-unknown-none-elf --features=${{ matrix.cargo_flags }}
+      run: RUSTFLAGS="-C link-arg=-Thifive1-link.x" cargo build --workspace --target riscv32imc-unknown-none-elf --features=${{ matrix.cargo_flags }},unsafe-assume-single-core
+    - name: Build riscv32imac-unknown-none-elf (no example)
+      run: cargo build --target riscv32imac-unknown-none-elf --features=${{ matrix.cargo_flags }}
+    - name: Build riscv64gc-unknown-none-elf (no example)
+      run: cargo build --target riscv64gc-unknown-none-elf --features=${{ matrix.cargo_flags }}
