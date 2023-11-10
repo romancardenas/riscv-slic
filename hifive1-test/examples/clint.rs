@@ -2,14 +2,18 @@
 #![no_main]
 
 extern crate panic_halt;
-
-use hifive1::hal::e310x::{Interrupt as ExtInterrupt, Priority, PLIC};
+use e310x::CLINT;
 use hifive1::hal::prelude::*;
 use hifive1::hal::DeviceResources;
 use hifive1::{pin, sprintln};
 
 use riscv_rt::entry;
-use riscv_slic;
+extern crate riscv_slic;
+
+#[cfg(feature = "qemu")]
+const PERIOD: u64 = 10000000; // 10 MHz in QEMU
+#[cfg(not(feature = "qemu"))]
+const PERIOD: u64 = 32_768; // 32.768 kHz in HW
 
 // generate SLIC code for this example
 riscv_slic::codegen!(
@@ -17,18 +21,17 @@ riscv_slic::codegen!(
     swi = [SoftLow, SoftMedium, SoftHigh],
     backend = [hart_id = HART0]
 );
+
 use slic::Interrupt as SoftInterrupt; // Re-export of automatically generated enum of interrupts in previous macro
 
-/// HW handler for clearing RTC.
-/// We must define a ClearX handler for every bypassed HW interrupt
+/// HW handler for MachineTimer interrupts triggered by CLINT.
 #[allow(non_snake_case)]
 #[no_mangle]
-unsafe fn RTC() {
-    // increase rtccmp to clear HW interrupt
-    let rtc = DeviceResources::steal().peripherals.RTC;
-    let rtccmp = rtc.rtccmp.read().bits();
-    sprintln!("--- clear RTC (rtccmp = {}) ---", rtccmp);
-    rtc.rtccmp.write(|w| w.bits(rtccmp + 65536));
+fn MachineTimer() {
+    let mtimecmp = CLINT::mtimecmp0();
+    let val = mtimecmp.read();
+    sprintln!("--- update MTIMECMP (mtimecmp = {}) ---", val);
+    mtimecmp.write(val + PERIOD);
     riscv_slic::pend(SoftInterrupt::SoftMedium);
 }
 
@@ -76,35 +79,12 @@ fn main() -> ! {
         clocks,
     );
 
-    // Disable watchdog
-    let wdg = peripherals.WDOG;
-    wdg.wdogcfg.modify(|_, w| w.enalways().clear_bit());
-
-    sprintln!("Configuring PLIC!!!...");
+    sprintln!("Configuring CLINT...");
     // First, we make sure that all PLIC the interrupts are disabled and set the interrupts priorities
-    PLIC::disable();
-    PLIC::priorities().reset::<ExtInterrupt>();
-    // Safety: interrupts are disabled
-    unsafe { PLIC::priorities().set_priority(ExtInterrupt::RTC, Priority::P7) };
-
-    // Next, we configure the PLIC context for our use case
-    let ctx = PLIC::ctx0();
-    ctx.enables().disable_all::<ExtInterrupt>();
-    // Safety: we are the only hart running and we have not enabled any interrupts yet
-    unsafe {
-        ctx.enables().enable(ExtInterrupt::RTC);
-        ctx.threshold().set_threshold(Priority::P1);
-    };
-    sprintln!("done!");
-
-    sprintln!("Configuring RTC...");
-    let mut rtc = peripherals.RTC.constrain();
-    rtc.disable();
-    rtc.set_scale(0);
-    rtc.set_rtc(0);
-    rtc.set_rtccmp(10000);
-    rtc.enable();
-    sprintln!("done!");
+    CLINT::disable();
+    let mtimer = CLINT::mtimer();
+    mtimer.mtimecmp0.write(PERIOD);
+    mtimer.mtime.write(0);
 
     sprintln!("Configuring SLIC...");
     // make sure that interrupts are off
@@ -116,15 +96,15 @@ fn main() -> ! {
         riscv_slic::set_priority(SoftInterrupt::SoftMedium, 2); // medium priority
         riscv_slic::set_priority(SoftInterrupt::SoftHigh, 3); // high priority
     }
-
     sprintln!("Done!");
 
     sprintln!("Enabling interrupts...");
     unsafe {
         riscv_slic::set_interrupts();
-        PLIC::enable();
+        CLINT::mtimer_enable();
         riscv_slic::enable();
     }
+    //let mut delay = CLINT::delay();
     loop {
         sprintln!("Going to sleep!");
         unsafe { riscv_slic::riscv::asm::wfi() };
