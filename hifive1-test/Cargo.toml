@@ -14,6 +14,3 @@ bare-metal = "0.2"
 riscv-rt = {git = "https://github.com/rust-embedded/riscv-rt.git", branch = "master"}
 # riscv-rt = {path = "../../../github/riscv-rt", features = ["atomic-emulation-trap"]}
 panic-halt = "0.2.0"
-
-[features]
-qemu = [] # feature for running on qemu (CLINT timer is 10MHz instead of 32KHz)

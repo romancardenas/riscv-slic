@@ -1,20 +1,20 @@
-pub use crate::riscv::{
+pub use riscv::{
     self,
     interrupt::{disable, enable},
 };
 
 #[cfg(feature = "msoft")]
-use riscv::register::mie::{clear_msoft as clear_swi, set_msoft as set_swi};
+use riscv::register::mie::{clear_msoft as disable_swi, set_msoft as enable_swi};
 #[cfg(feature = "ssoft")]
-use riscv::register::mie::{clear_ssoft as clear_swi, set_ssoft as set_swi};
+use riscv::register::sie::{clear_ssoft as disable_swi, set_ssoft as enable_swi};
 
-extern "C" {
-    fn __slic_clear();
-    fn __slic_set_threshold(priority: u8);
-    fn __slic_get_threshold() -> u8;
-    fn __slic_get_priority(interrupt: u16) -> u8;
-    fn __slic_set_priority(interrupt: u16, priority: u8);
-    fn __slic_pend(interrupt: u16);
+extern "Rust" {
+    fn __riscv_slic_swi_unpend();
+    fn __riscv_slic_set_threshold(priority: u8);
+    fn __riscv_slic_get_threshold() -> u8;
+    fn __riscv_slic_get_priority(interrupt: u16) -> u8;
+    fn __riscv_slic_set_priority(interrupt: u16, priority: u8);
+    fn __riscv_slic_pend(interrupt: u16);
 }
 
 /// Clears software interrupt flags to avoid interruptions.
@@ -23,13 +23,13 @@ extern "C" {
 /// # Note
 ///
 /// This function does **NOT** modify the [`riscv::register::mstatus`] register.
-/// If you want to disable **ANY** interrupt/exception, you must **ALSO** use the [`disable`] function.
+/// If you want to disable **ANY** other interrupt source, you must **ALSO** use the [`disable`] function.
 #[inline]
 pub fn clear_interrupts() {
     // SAFETY: interrupts are disabled before modifying thresholds/priorities
     unsafe {
-        clear_swi();
-        __slic_clear();
+        disable_swi();
+        __riscv_slic_swi_unpend();
         set_threshold(u8::MAX);
     }
 }
@@ -40,7 +40,7 @@ pub fn clear_interrupts() {
 /// # Note
 ///
 /// This function does not modify the [`riscv::register::mstatus`] register.
-/// If you want to enable **ANY** interrupt/exception, you must **ALSO** use the [`enable`] function.
+/// If you want to enable **ANY** other interrupt source, you must **ALSO** use the [`enable`] function.
 ///
 /// # Safety
 ///
@@ -48,31 +48,7 @@ pub fn clear_interrupts() {
 #[inline]
 pub unsafe fn set_interrupts() {
     set_threshold(0);
-    set_swi();
-}
-
-/// Utility function to call an ISR while enabling nested interrupts.
-/// Source: https://www.five-embeddev.com/code/2022/06/29/nested-interrupts/
-///
-/// # Safety
-///
-/// Use this function in ISRs only.
-#[inline]
-pub unsafe fn nested_isr(f: impl FnOnce()) {
-    // store mstatus and mepc
-    let mstatus = riscv::register::mstatus::read();
-    let mepc = riscv::register::mepc::read();
-
-    riscv::register::mstatus::set_mie(); // re-enable interrupts
-    f(); // call the ISR
-    riscv::register::mstatus::clear_mie(); // disable interrupts
-
-    // restore mstatus and mepc
-    if mstatus.mpie() {
-        riscv::register::mstatus::set_mpie();
-    }
-    riscv::register::mstatus::set_mpp(mstatus.mpp());
-    riscv::register::mepc::write(mepc);
+    enable_swi();
 }
 
 /// Stabilized API for changing the threshold of the SLIC.
@@ -82,21 +58,21 @@ pub unsafe fn nested_isr(f: impl FnOnce()) {
 /// Changing the priority threshold may break mask-based critical sections.
 #[inline]
 pub unsafe fn set_threshold(priority: u8) {
-    __slic_set_threshold(priority);
+    __riscv_slic_set_threshold(priority);
 }
 
 /// Stabilized API for getting the current threshold of the SLIC.
-#[inline(always)]
+#[inline]
 pub fn get_threshold() -> u8 {
     // SAFETY: this read has no side effects.
-    unsafe { __slic_get_threshold() }
+    unsafe { __riscv_slic_get_threshold() }
 }
 
 /// Stabilized API for getting the priority of a given software interrupt source.
 #[inline]
 pub fn get_priority<I: crate::InterruptNumber>(interrupt: I) -> u8 {
     // SAFETY: this read has no side effects.
-    unsafe { __slic_get_priority(interrupt.number()) }
+    unsafe { __riscv_slic_get_priority(interrupt.number()) }
 }
 
 /// Stabilized API for setting the priority of a software interrupt of the SLIC.
@@ -106,14 +82,14 @@ pub fn get_priority<I: crate::InterruptNumber>(interrupt: I) -> u8 {
 /// Changing the priority of an interrupt may break mask-based critical sections.
 #[inline]
 pub unsafe fn set_priority<I: crate::InterruptNumber>(interrupt: I, priority: u8) {
-    __slic_set_priority(interrupt.number(), priority);
+    __riscv_slic_set_priority(interrupt.number(), priority);
 }
 
 /// Stabilized API for pending a software interrupt on the SLIC.
 #[inline]
 pub fn pend<I: crate::InterruptNumber>(interrupt: I) {
     // SAFETY: TODO
-    unsafe { __slic_pend(interrupt.number()) };
+    unsafe { __riscv_slic_pend(interrupt.number()) };
 }
 
 /// Runs a function with priority mask.

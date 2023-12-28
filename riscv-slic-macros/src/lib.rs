@@ -6,8 +6,7 @@ mod export;
 mod input;
 mod swi;
 
-// Ex. codegen!(pac, [HW1, HW2], [SW1, SW2])
-// Ex. codegen!(e310x, [GPIO1, RTC], [Task1, Task2])
+// Ex. codegen!(pac = <pac crate>, swi = [list, of, software, interrupts], backend = <backend-specific configuration>)
 #[proc_macro]
 pub fn codegen(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as input::CodegenInput);

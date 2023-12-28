@@ -10,11 +10,6 @@ use hifive1::{pin, sprintln};
 use riscv_rt::entry;
 extern crate riscv_slic;
 
-#[cfg(feature = "qemu")]
-const PERIOD: u64 = 10000000; // 10 MHz in QEMU
-#[cfg(not(feature = "qemu"))]
-const PERIOD: u64 = 32_768; // 32.768 kHz in HW
-
 // generate SLIC code for this example
 riscv_slic::codegen!(
     pac = e310x,
@@ -31,7 +26,7 @@ fn MachineTimer() {
     let mtimecmp = CLINT::mtimecmp0();
     let val = mtimecmp.read();
     sprintln!("--- update MTIMECMP (mtimecmp = {}) ---", val);
-    mtimecmp.write(val + PERIOD);
+    mtimecmp.write(val + CLINT::freq() as u64);
     riscv_slic::pend(SoftInterrupt::SoftMedium);
 }
 
@@ -83,12 +78,12 @@ fn main() -> ! {
     // First, we make sure that all PLIC the interrupts are disabled and set the interrupts priorities
     CLINT::disable();
     let mtimer = CLINT::mtimer();
-    mtimer.mtimecmp0.write(PERIOD);
+    mtimer.mtimecmp0.write(CLINT::freq() as u64);
     mtimer.mtime.write(0);
 
     sprintln!("Configuring SLIC...");
     // make sure that interrupts are off
-    unsafe { riscv_slic::disable() };
+    riscv_slic::disable();
     riscv_slic::clear_interrupts();
     // Set priorities
     unsafe {

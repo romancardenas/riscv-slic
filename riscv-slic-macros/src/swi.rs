@@ -14,9 +14,9 @@ fn interrupts_enum(input: &[Ident]) -> Vec<TokenStream> {
 fn swi_handler_signature() -> TokenStream {
     match () {
         #[cfg(feature = "msoft")]
-        () => "MachineSoft".parse().unwrap(),
+        () => "unsafe fn MachineSoft()".parse().unwrap(),
         #[cfg(feature = "ssoft")]
-        () => "SupervisorSoft".parse().unwrap(),
+        () => "unsafe fn SupervisorSoft()".parse().unwrap(),
     }
 }
 
@@ -38,10 +38,12 @@ pub fn swi_mod(input: &CodegenInput) -> TokenStream {
         unsafe impl riscv_slic::InterruptNumber for Interrupt {
             const MAX_INTERRUPT_NUMBER: u16 = #n_interrupts as u16 - 1;
 
+            #[inline]
             fn number(self) -> u16 {
                 self as _
             }
 
+            #[inline]
             fn from_number(value: u16) -> Result<Self, u16> {
                 if value > Self::MAX_INTERRUPT_NUMBER {
                     Err(value)
@@ -56,22 +58,20 @@ pub fn swi_mod(input: &CodegenInput) -> TokenStream {
             #(fn #swi_handlers ();)*
         }
 
-        #[no_mangle]
-        pub static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); #n_interrupts] = [
+        /// Array of software interrupt handlers in the order of the `Interrupt` enum.
+        static __SOFTWARE_INTERRUPTS: [unsafe extern "C" fn(); #n_interrupts] = [
             #(#swi_handlers),*
         ];
 
-        pub static mut __SLIC: riscv_slic::SLIC<#n_interrupts> = riscv_slic::SLIC::new();
+        /// The static SLIC instance
+        static mut __SLIC: riscv_slic::SLIC<#n_interrupts> = riscv_slic::SLIC::new();
 
+        /// Software interrupt handler to be used with the SLIC.
         #[no_mangle]
         #[allow(non_snake_case)]
-        pub unsafe fn #swi_handler_signature() {
-            export_swi_clear(); // We clear the software interrupt flag to allow nested interrupts
-            riscv_slic::nested_isr(|| {
-                while let Some((priority, interrupt)) = __SLIC.pop() {
-                    riscv_slic::run(priority, || __SOFTWARE_INTERRUPTS[interrupt as usize]());
-                }
-            });
+        #swi_handler_signature {
+            __riscv_slic_swi_unpend();
+            riscv_slic::riscv::interrupt::nested(|| unsafe { __riscv_slic_run() });
         }
     )
 }

@@ -4,14 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+heapless = "0.8.0"
 portable-atomic = { version = "1.4", default-features = false, features = ["require-cas"] }
-heapless = "0.7.0"
-riscv-peripheral ={ git = "https://github.com/romancardenas/riscv-peripheral.git", branch = "main" }
+riscv ={ git = "https://github.com/rust-embedded/riscv.git", branch = "add-ecall" }
 riscv-slic-macros = { path = "../riscv-slic-macros" }
 
 [features]
 msoft = [] # do not enable this feature directly. Use one of the *-backend features instead
-ssoft = [] # do not enable this feature directly. Use one of the *-backend features instead
+ssoft = ["riscv/s-mode"] # do not enable this feature directly. Use one of the *-backend features instead
 
 clint-backend = ["msoft", "riscv-slic-macros/clint-backend"] # enable this feature to use the CLINT peripheral as SWI backend
 ssoft-backend = ["ssoft", "riscv-slic-macros/ssoft-backend"] # enable this feature to use supervisor-level software interrupts as SWI backend

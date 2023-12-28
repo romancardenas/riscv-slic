@@ -45,16 +45,26 @@ pub fn export_quote(input: &CodegenInput) -> TokenStream {
     let backend = input.backend.as_ref().unwrap();
     let hart_id = &backend.hart_id;
     quote! {
-        /// Triggers a machine software interrupt via the CLINT peripheral
+        /// Triggers a machine software interrupt via the CLINT peripheral.
+        ///
+        /// # Safety
+        ///
+        /// This function is only for `riscv-slic` internal use. Do not call it directly.
         #[inline]
-        pub unsafe fn export_swi_set() {
+        #[no_mangle]
+        pub unsafe fn __riscv_slic_swi_pend() {
             let msip = #pac::CLINT::mswi().msip(#pac::clint::HartId::#hart_id);
             msip.pend();
         }
 
-        /// Clears the Machine Software Interrupt Pending bit via the CLINT peripheral
+        /// Clears the Machine Software Interrupt Pending bit via the CLINT peripheral.
+        ///
+        /// # Safety
+        ///
+        /// This function is only for `riscv-slic` internal use. Do not call it directly.
         #[inline]
-        pub unsafe fn export_swi_clear() {
+        #[no_mangle]
+        pub unsafe fn __riscv_slic_swi_unpend() {
             let msip = #pac::CLINT::mswi().msip(#pac::clint::HartId::#hart_id);
             msip.unpend();
         }

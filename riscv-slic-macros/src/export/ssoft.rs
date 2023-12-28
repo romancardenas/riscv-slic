@@ -19,16 +19,26 @@ impl Parse for ExportBackendInput {
 
 pub fn export_quote(_input: &CodegenInput) -> TokenStream {
     quote! {
-        /// Triggers a machine software interrupt via the CLINT peripheral
+        /// Triggers a supervisor software interrupt via the `SIP` register.
+        ///
+        /// # Safety
+        ///
+        /// This function is only for `riscv-slic` internal use. Do not call it directly.
         #[inline]
-        pub unsafe fn export_swi_set() {
-            riscv_slic::riscv::register::mip::set_ssoft();
+        #[no_mangle]
+        pub unsafe fn __riscv_slic_swi_pend() {
+            riscv_slic::riscv::register::sip::set_ssoft();
         }
 
-        /// Clears the Machine Software Interrupt Pending bit via the CLINT peripheral
+        /// Clears the Supervisor Software Interrupt Pending bit in the `SIP` register.
+        ///
+        /// # Safety
+        ///
+        /// This function is only for `riscv-slic` internal use. Do not call it directly.
         #[inline]
-        pub unsafe fn export_swi_clear() {
-            riscv_slic::riscv::register::mip::clear_ssoft();
+        #[no_mangle]
+        pub unsafe fn __riscv_slic_swi_unpend() {
+            riscv_slic::riscv::register::sip::clear_ssoft();
         }
     }
 }

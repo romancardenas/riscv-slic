@@ -1,6 +1,6 @@
 #![no_std]
 
-pub use riscv_peripheral::{self, riscv};
+pub use riscv;
 pub use riscv_slic_macros::*;
 
 mod api;

@@ -19,15 +19,25 @@ impl Parse for BackendInput {
 pub fn export_quote(input: &CodegenInput) -> TokenStream {
     quote! {
         /// Triggers a software interrupt
+        ///
+        /// # Safety
+        ///
+        /// This function is only for `riscv-slic` internal use. Do not call it directly.
         #[inline]
-        pub unsafe fn export_swi_set() {
-            todo!();
+        #[no_mangle]
+        pub unsafe fn __riscv_slic_swi_pend() {
+            todo!("define how to trigger a software interrupt");
         }
 
         /// Clears a software interrupt
+        ///
+        /// # Safety
+        ///
+        /// This function is only for `riscv-slic` internal use. Do not call it directly.
         #[inline]
-        pub unsafe fn export_swi_clear() {
-            todo!();
+        #[no_mangle]
+        pub unsafe fn __riscv_slic_swi_unpend() {
+            todo!("define how to clear a software interrupt");
         }
     }
 }
