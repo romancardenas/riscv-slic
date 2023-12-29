@@ -7,10 +7,9 @@ edition = "2021"
 
 [dependencies]
 riscv-slic = {path = "../riscv-slic", features = ["clint-backend", "unsafe-assume-single-core"]}
-e310x = { git = "https://github.com/greenlsi/e310x.git", rev = "f22b4dd"}
-hifive1 = { git = "https://github.com/greenlsi/hifive1.git", branch = "rtc", features = ["board-redv"] }
+e310x = { git = "https://github.com/greenlsi/e310x.git", branch = "master"}
+hifive1 = { git = "https://github.com/romancardenas/hifive1.git", branch = "master", features = ["board-redv"] }
 bare-metal = "0.2"
 # riscv-rt = "0.11.0"
 riscv-rt = {git = "https://github.com/rust-embedded/riscv-rt.git", branch = "master"}
-# riscv-rt = {path = "../../../github/riscv-rt", features = ["atomic-emulation-trap"]}
 panic-halt = "0.2.0"
