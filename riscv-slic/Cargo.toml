@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 heapless = "0.8.0"
 portable-atomic = { version = "1.4", default-features = false, features = ["require-cas"] }
-riscv ={ git = "https://github.com/rust-embedded/riscv.git", branch = "add-ecall" }
+riscv ={ git = "https://github.com/rust-embedded/riscv.git", rev = "c0ce676" }
 riscv-slic-macros = { path = "../riscv-slic-macros" }
 
 [features]
