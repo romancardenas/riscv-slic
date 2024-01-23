@@ -3,8 +3,6 @@ use quote::quote;
 
 pub fn api_mod() -> TokenStream {
     quote!(
-        use riscv_slic::InterruptNumber; // expose the InterruptNumber trait
-
         /// Returns the current priority threshold of the SLIC.
         ///
         /// # Safety
@@ -27,7 +25,6 @@ pub fn api_mod() -> TokenStream {
             critical_section::with(|cs| {
                 let mut slic = __SLIC.borrow_ref_mut(cs);
                 slic.set_threshold(thresh);
-                // check if we need to trigger a software interrupt after changing the threshold
                 if slic.is_ready() {
                     __riscv_slic_swi_pend();
                 }
@@ -69,7 +66,6 @@ pub fn api_mod() -> TokenStream {
             critical_section::with(|cs| {
                 let mut slic = __SLIC.borrow_ref_mut(cs);
                 slic.pend(interrupt);
-                // check if we need to trigger a software interrupt after pending
                 if slic.is_ready() {
                     __riscv_slic_swi_pend();
                 }
@@ -84,10 +80,8 @@ pub fn api_mod() -> TokenStream {
         #[inline]
         #[no_mangle]
         pub unsafe fn __riscv_slic_run() {
-            if let Some((priority, interrupt)) =
-                critical_section::with(|cs| __SLIC.borrow_ref_mut(cs).pop())
-            {
-                riscv_slic::run(priority, || __SOFTWARE_INTERRUPTS[interrupt as usize]());
+            if let Some((pri, int)) = critical_section::with(|cs| __SLIC.borrow_ref_mut(cs).pop()) {
+                riscv_slic::run(pri, || __SOFTWARE_INTERRUPTS[int as usize]());
             }
         }
     )
