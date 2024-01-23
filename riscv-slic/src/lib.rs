@@ -1,5 +1,6 @@
 #![no_std]
 
+pub use critical_section;
 pub use riscv;
 pub use riscv_slic_macros::*;
 
@@ -7,7 +8,7 @@ mod api;
 mod slic;
 
 pub use api::*;
-pub use slic::SLIC;
+pub use slic::{new_slic, MutexSLIC};
 
 /// Trait for enums of interrupt numbers.
 ///

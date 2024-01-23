@@ -1,7 +1,4 @@
-pub use riscv::{
-    self,
-    interrupt::{disable, enable},
-};
+pub use riscv::interrupt::{disable, enable};
 
 #[cfg(feature = "msoft")]
 use riscv::register::mie::{clear_msoft as disable_swi, set_msoft as enable_swi};

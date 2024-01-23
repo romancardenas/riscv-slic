@@ -35,7 +35,7 @@ pub fn swi_mod(input: &CodegenInput) -> TokenStream {
             #(#swi_enums),*
         }
 
-        unsafe impl riscv_slic::InterruptNumber for Interrupt {
+        unsafe impl InterruptNumber for Interrupt {
             const MAX_INTERRUPT_NUMBER: u16 = #n_interrupts as u16 - 1;
 
             #[inline]
@@ -64,14 +64,14 @@ pub fn swi_mod(input: &CodegenInput) -> TokenStream {
         ];
 
         /// The static SLIC instance
-        static mut __SLIC: riscv_slic::SLIC<#n_interrupts> = riscv_slic::SLIC::new();
+        static mut __SLIC: MutexSLIC<#n_interrupts> = new_slic();
 
         /// Software interrupt handler to be used with the SLIC.
         #[no_mangle]
         #[allow(non_snake_case)]
         #swi_handler_signature {
             __riscv_slic_swi_unpend();
-            riscv_slic::riscv::interrupt::nested(|| unsafe { __riscv_slic_run() });
+            riscv::interrupt::nested(|| unsafe { __riscv_slic_run() });
         }
     )
 }
