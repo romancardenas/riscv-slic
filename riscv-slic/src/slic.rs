@@ -1,5 +1,7 @@
+use core::cell::RefCell;
+use critical_section::Mutex;
 use heapless::binary_heap::{BinaryHeap, Max};
-use portable_atomic::{AtomicBool, AtomicU8, Ordering};
+use portable_atomic::{AtomicBool, AtomicU8, Ordering::*};
 
 /// Software interrupt controller
 #[allow(clippy::upper_case_acronyms)]
@@ -14,7 +16,7 @@ pub struct SLIC<const N: usize> {
     /// Array to check if a software interrupt source is pending.
     pending: [AtomicBool; N],
     /// Priority queue with pending interrupt sources.
-    queue: BinaryHeap<(u8, u16), Max, N>,
+    queue: Mutex<RefCell<BinaryHeap<(u8, u16), Max, N>>>,
 }
 
 // Hack to create an array of atomic booleans statically.
@@ -29,7 +31,7 @@ impl<const N: usize> SLIC<N> {
             threshold: AtomicU8::new(0),
             priorities: [0; N],
             pending: [DEFAULT_ATOMIC; N],
-            queue: BinaryHeap::new(),
+            queue: Mutex::new(RefCell::new(BinaryHeap::new())),
         }
     }
 
@@ -60,7 +62,7 @@ impl<const N: usize> SLIC<N> {
     //// Returns current priority threshold.
     #[inline]
     pub fn get_threshold(&self) -> u8 {
-        self.threshold.load(Ordering::Acquire)
+        self.threshold.load(Acquire)
     }
 
     /// Sets the priority threshold of the controller.
@@ -70,20 +72,21 @@ impl<const N: usize> SLIC<N> {
     /// Changing the priority threshold may break priority-based critical sections.
     #[inline]
     pub unsafe fn set_threshold(&mut self, priority: u8) {
-        self.threshold.store(priority, Ordering::Release);
+        self.threshold.store(priority, Release);
     }
 
     /// Checks if a given interrupt is pending.
     #[inline]
     pub fn is_pending(&mut self, interrupt: u16) -> bool {
-        self.pending[interrupt as usize].load(Ordering::Acquire)
+        self.pending[interrupt as usize].load(Acquire)
     }
 
     /// Returns `true` if the next queued interrupt can be triggered.
     #[inline]
     pub fn is_ready(&self) -> bool {
-        match self.queue.peek() {
-            Some(&(p, _)) => p > self.threshold.load(Ordering::Acquire),
+        let next = critical_section::with(|cs| self.queue.borrow_ref(cs).peek().map(|&(p, _)| p));
+        match next {
+            Some(p) => p > self.threshold.load(Acquire),
             None => false,
         }
     }
@@ -100,11 +103,12 @@ impl<const N: usize> SLIC<N> {
             return;
         }
         // set the task to pending and push to the queue if it was not pending beforehand.
-        if let Ok(false) =
-            self.pending[i].compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
-        {
-            // SAFETY: we do not allow the same task to be pending more than once
-            unsafe { self.queue.push_unchecked((self.priorities[i], interrupt)) };
+        if let Ok(false) = self.pending[i].compare_exchange(false, true, AcqRel, Relaxed) {
+            critical_section::with(|cs| {
+                let mut queue = self.queue.borrow_ref_mut(cs);
+                // SAFETY: we guarantee that the same task can not be pending more than once
+                unsafe { queue.push_unchecked((self.priorities[i], interrupt)) };
+            });
         }
     }
 
@@ -112,13 +116,11 @@ impl<const N: usize> SLIC<N> {
     #[inline]
     pub fn pop(&mut self) -> Option<(u8, u16)> {
         while self.is_ready() {
-            if let Some((priority, interrupt)) = self.queue.pop() {
-                if let Ok(true) = self.pending[interrupt as usize].compare_exchange(
-                    true,
-                    false,
-                    Ordering::AcqRel,
-                    Ordering::Relaxed,
-                ) {
+            let next = critical_section::with(|cs| self.queue.borrow_ref_mut(cs).pop());
+            if let Some((priority, interrupt)) = next {
+                if let Ok(true) =
+                    self.pending[interrupt as usize].compare_exchange(true, false, AcqRel, Relaxed)
+                {
                     return Some((priority, interrupt));
                 }
             }

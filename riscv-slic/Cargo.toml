@@ -4,9 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+critical-section = "1.1.2"
 heapless = "0.8.0"
 portable-atomic = { version = "1.4", default-features = false, features = ["require-cas"] }
-riscv ={ git = "https://github.com/rust-embedded/riscv.git", rev = "c0ce676" }
+riscv = "0.11.0"
 riscv-slic-macros = { path = "../riscv-slic-macros" }
 
 [features]
