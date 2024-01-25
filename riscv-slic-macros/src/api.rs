@@ -81,7 +81,7 @@ pub fn api_mod() -> TokenStream {
         #[no_mangle]
         pub unsafe fn __riscv_slic_run() {
             if let Some((pri, int)) = critical_section::with(|cs| __SLIC.borrow_ref_mut(cs).pop()) {
-                riscv_slic::run(pri, || __SOFTWARE_INTERRUPTS[int as usize]());
+                run(pri, || __SOFTWARE_INTERRUPTS[int as usize]());
             }
         }
     )
