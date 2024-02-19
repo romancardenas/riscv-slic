@@ -17,6 +17,7 @@ pub fn codegen(input: TokenStream) -> TokenStream {
     let swi_code = swi::swi_mod(&input);
 
     quote! {
+        /// The RISC-V SLIC module
         pub mod slic {
             use super::riscv_slic::*;
 
