@@ -101,7 +101,13 @@ fn main() -> ! {
     }
     //let mut delay = CLINT::delay();
     loop {
+        //  read stack pointer
+        let pc: usize;
+        unsafe {
+            core::arch::asm!("mv {}, sp", out(reg) pc);
+        }
+        sprintln!("Program counter: {:x}", pc);
         sprintln!("Going to sleep!");
-        unsafe { riscv_slic::riscv::asm::wfi() };
+        riscv_slic::riscv::asm::wfi();
     }
 }

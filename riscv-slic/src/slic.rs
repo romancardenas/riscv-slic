@@ -63,9 +63,28 @@ impl<const N: usize> SLIC<N> {
     }
 
     /// Sets the priority threshold of the controller.
+    ///
+    /// # Safety
+    ///
+    /// Setting the priority threshold to a value lower than the current threshold
+    /// may lead to priority inversion. If you want to make sure that the threshold
+    /// is raised, use the [`raise_threshold`] method instead.
     #[inline]
-    pub fn set_threshold(&mut self, priority: u8) {
+    pub unsafe fn set_threshold(&mut self, priority: u8) {
         self.threshold = priority;
+    }
+
+    /// Sets the priority threshold only to a higher value than the current threshold.
+    /// When the threshold is raised, the function returns `Ok(prev_threshold)`.
+    /// Otherwise, the threshold is not changed and `Err(())` is returned.
+    pub fn raise_threshold(&mut self, priority: u8) -> Result<u8, ()> {
+        if priority > self.threshold {
+            let prev = self.threshold;
+            self.threshold = priority;
+            Ok(prev)
+        } else {
+            Err(())
+        }
     }
 
     /// Checks if a given interrupt is pending.

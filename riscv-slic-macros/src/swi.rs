@@ -76,7 +76,7 @@ pub fn swi_mod(input: &CodegenInput) -> TokenStream {
         #[allow(non_snake_case)]
         #swi_handler_signature {
             __riscv_slic_swi_unpend();
-            riscv::interrupt::nested(|| unsafe { __riscv_slic_run() });
+            riscv::interrupt::nested(|| unsafe { __riscv_slic_pop() });
         }
     ));
     quote!(#(#res)*)
