@@ -2,6 +2,8 @@
 name = "riscv-slic"
 version = "0.1.0"
 edition = "2021"
+description = "RISC-V Software-Level Interrupt Controller"
+license = "MIT"
 
 [dependencies]
 critical-section = "1.1.2"
