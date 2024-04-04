@@ -1,9 +1,18 @@
 [package]
 name = "riscv-slic"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "RISC-V Software-Level Interrupt Controller"
 license = "MIT"
+readme = "README.md"
+repository = "https://github.com/romancardenas/riscv-slic"
+keywords = ["riscv", "software", "interrupts", "embedded"]
+categories = ["embedded", "hardware-support"]
+documentation = "https://docs.rs/riscv-slic"
+
+[package.metadata.docs.rs]
+targets = ["riscv32imc-unknown-none-elf"]
+features = ["clint-backend"]
 
 [dependencies]
 critical-section = "1.1.2"

@@ -14,11 +14,11 @@ jobs:
   ci-linux:
     strategy:
       matrix:
-        # All generated code should be running on stable now, MRSV is 1.61.0
+        # All generated code should be running on stable now, MRSV is 1.75.0
         toolchain: 
         - stable
         - nightly
-        - 1.61.0
+        - 1.75.0
         cargo_flags:
           - "clint-backend"
         include:
