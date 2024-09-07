@@ -6,9 +6,20 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-riscv-slic = {path = "../riscv-slic", features = ["clint-backend"]}
-e310x = { git = "https://github.com/greenlsi/e310x.git", branch = "master"}
-hifive1 = { git = "https://github.com/romancardenas/hifive1.git", branch = "master", features = ["board-redv"] }
+riscv-slic = { path = "../riscv-slic" }
+riscv-rt = { git = "https://github.com/rust-embedded/riscv", branch = "riscv-pac-only" } # TODO use crates.io
+hifive1 = { git = "https://github.com/greenlsi/hifive1.git", branch = "master", features = ["board-redv"] } # TODO use crates.io
 bare-metal = "0.2"
-riscv-rt = "0.12.0"
 panic-halt = "0.2.0"
+
+[features]
+clint = ["riscv-slic/clint-backend"]
+mecall = ["riscv-slic/mecall-backend"]
+
+[[example]]
+name = "clint"
+required-features = ["clint"]
+
+[[example]]
+name = "mecall"
+required-features = ["mecall"]

@@ -14,11 +14,7 @@ use hifive1::{
 };
 
 // generate SLIC code for this example
-riscv_slic::codegen!(
-    pac = e310x,
-    swi = [SoftLow, SoftMedium, SoftHigh],
-    backend = [hart_id = H0]
-);
+riscv_slic::codegen!(pac = e310x, swi = [SoftLow, SoftMedium, SoftHigh]);
 use slic::SoftwareInterrupt; // Re-export of automatically generated enum of interrupts in previous macro
 
 /// HW handler for MachineTimer interrupts triggered by CLINT.
@@ -104,6 +100,5 @@ fn main() -> ! {
         riscv_slic::riscv::asm::wfi();
         sprintln!("Interrupt received!");
         riscv_slic::pend(SoftwareInterrupt::SoftMedium);
-        sprintln!();
     }
 }

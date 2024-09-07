@@ -1,5 +1,5 @@
 use syn::parse::Parse;
-use syn::{bracketed, parse::ParseStream, token::Comma, Error, Ident, Result, Token};
+use syn::{bracketed, parse::ParseStream, token::Comma, Error, Ident, Path, Result, Token};
 
 pub use crate::export::ExportBackendInput; // backend-specific input
 
@@ -23,8 +23,9 @@ impl Parse for HandlersInput {
 }
 
 pub struct CodegenInput {
-    pub pac: Ident,
+    pub pac: Path,
     pub swi_handlers: HandlersInput,
+    #[allow(dead_code)]
     pub backend: Option<ExportBackendInput>,
 }
 

@@ -1,4 +1,4 @@
-pub use riscv::interrupt::{disable, enable};
+pub use riscv::interrupt::{disable, enable, nested};
 
 #[cfg(feature = "msoft")]
 use riscv::register::mie::{clear_msoft as disable_swi, set_msoft as enable_swi};
@@ -26,6 +26,7 @@ extern "Rust" {
 pub fn clear_interrupts() {
     // SAFETY: interrupts are disabled before modifying thresholds/priorities
     unsafe {
+        #[cfg(not(feature = "mecall-backend"))]
         disable_swi();
         __riscv_slic_swi_unpend();
         __riscv_slic_set_threshold(u8::MAX);
@@ -46,6 +47,7 @@ pub fn clear_interrupts() {
 #[inline]
 pub unsafe fn set_interrupts() {
     __riscv_slic_set_threshold(0);
+    #[cfg(not(feature = "mecall-backend"))]
     enable_swi();
 }
 
@@ -79,6 +81,20 @@ pub unsafe fn set_priority<I: crate::InterruptNumber>(interrupt: I, priority: u8
 }
 
 /// Stabilized API for pending a software interrupt on the SLIC.
+///
+/// # Note
+///
+/// When working with the `mecall-backend` feature, special care must be taken
+/// when using this function **inside** an interrupt handler. This is because
+/// this backend uses the `ecall` instruction to trigger software interrupts.
+/// If you call this function inside an interrupt handler, the `mepc` register
+/// will be incremented by 4, leading to unexpected behavior.
+/// To avoid this, make sure that:
+///
+/// - You only call this function **outside** of interrupt handlers.
+/// - If you need to trigger a software interrupt inside an interrupt handler,
+///   do it inside a [`nested`] block. This will ensure that the
+///   `mepc` register is not incremented incorrectly.
 #[inline]
 pub fn pend<I: crate::InterruptNumber>(interrupt: I) {
     // SAFETY: it is safe to pend a software interrupt

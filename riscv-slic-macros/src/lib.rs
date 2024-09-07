@@ -10,6 +10,7 @@ mod swi;
 #[proc_macro]
 pub fn codegen(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as input::CodegenInput);
+    let pac = &input.pac;
 
     let api_code = api::api_mod();
 
@@ -19,7 +20,8 @@ pub fn codegen(input: TokenStream) -> TokenStream {
     quote! {
         /// The RISC-V SLIC module
         pub mod slic {
-            use super::riscv_slic::*;
+            use super::#pac;
+            use riscv_slic::*;
 
             #api_code
 
