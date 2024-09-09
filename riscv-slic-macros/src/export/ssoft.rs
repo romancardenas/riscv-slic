@@ -27,7 +27,7 @@ pub fn export_quote(_input: &CodegenInput) -> TokenStream {
         #[inline]
         #[no_mangle]
         pub unsafe fn __riscv_slic_swi_pend() {
-            riscv::register::sip::set_ssoft();
+            riscv_slic::riscv::register::sip::set_ssoft();
         }
 
         /// Clears the Supervisor Software Interrupt Pending bit in the `SIP` register.
@@ -38,7 +38,7 @@ pub fn export_quote(_input: &CodegenInput) -> TokenStream {
         #[inline]
         #[no_mangle]
         pub unsafe fn __riscv_slic_swi_unpend() {
-            riscv::register::sip::clear_ssoft();
+            riscv_slic::riscv::register::sip::clear_ssoft();
         }
     }
 }

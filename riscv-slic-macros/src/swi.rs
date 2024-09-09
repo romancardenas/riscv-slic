@@ -78,7 +78,7 @@ pub fn swi_mod(input: &CodegenInput) -> TokenStream {
         ];
 
         /// The static SLIC instance
-        static mut __SLIC: MutexSLIC<#n_interrupts> = new_slic();
+        static mut __SLIC: riscv_slic::MutexSLIC<#n_interrupts> = riscv_slic::new_slic();
 
         /// Software interrupt handler to be used with the SLIC.
         #swi_handler_attribute

@@ -6,6 +6,7 @@ use riscv::register::mie::{clear_msoft as disable_swi, set_msoft as enable_swi};
 use riscv::register::sie::{clear_ssoft as disable_swi, set_ssoft as enable_swi};
 
 extern "Rust" {
+    #[cfg(not(feature = "mecall-backend"))]
     fn __riscv_slic_swi_unpend();
     fn __riscv_slic_get_threshold() -> u8;
     fn __riscv_slic_set_threshold(priority: u8);
@@ -20,7 +21,7 @@ extern "Rust" {
 ///
 /// # Note
 ///
-/// This function does **NOT** modify the [`riscv::register::mstatus`] register.
+/// This function does **NOT** modify the [`mstatus`](`riscv::register::mstatus`) register.
 /// If you want to disable **ANY** other interrupt source, you must **ALSO** use the [`disable`] function.
 #[inline]
 pub fn clear_interrupts() {
@@ -28,6 +29,7 @@ pub fn clear_interrupts() {
     unsafe {
         #[cfg(not(feature = "mecall-backend"))]
         disable_swi();
+        #[cfg(not(feature = "mecall-backend"))]
         __riscv_slic_swi_unpend();
         __riscv_slic_set_threshold(u8::MAX);
     }
@@ -38,7 +40,7 @@ pub fn clear_interrupts() {
 ///
 /// # Note
 ///
-/// This function does not modify the [`riscv::register::mstatus`] register.
+/// This function does not modify the [`mstatus`](`riscv::register::mstatus`) register.
 /// If you want to enable **ANY** other interrupt source, you must **ALSO** use the [`enable`] function.
 ///
 /// # Safety
@@ -62,9 +64,7 @@ pub fn get_threshold() -> u8 {
 ///
 /// # Safety
 ///
-/// Setting the priority threshold to a value lower than the current threshold
-/// may lead to priority inversion. If you want to make sure that the threshold
-/// is only raised, use the [`raise_threshold`] function instead.
+/// Setting the priority threshold to a value lower than the current may lead to priority inversion.
 #[inline]
 pub unsafe fn set_threshold(priority: u8) {
     __riscv_slic_set_threshold(priority);
@@ -81,20 +81,6 @@ pub unsafe fn set_priority<I: crate::InterruptNumber>(interrupt: I, priority: u8
 }
 
 /// Stabilized API for pending a software interrupt on the SLIC.
-///
-/// # Note
-///
-/// When working with the `mecall-backend` feature, special care must be taken
-/// when using this function **inside** an interrupt handler. This is because
-/// this backend uses the `ecall` instruction to trigger software interrupts.
-/// If you call this function inside an interrupt handler, the `mepc` register
-/// will be incremented by 4, leading to unexpected behavior.
-/// To avoid this, make sure that:
-///
-/// - You only call this function **outside** of interrupt handlers.
-/// - If you need to trigger a software interrupt inside an interrupt handler,
-///   do it inside a [`nested`] block. This will ensure that the
-///   `mepc` register is not incremented incorrectly.
 #[inline]
 pub fn pend<I: crate::InterruptNumber>(interrupt: I) {
     // SAFETY: it is safe to pend a software interrupt
