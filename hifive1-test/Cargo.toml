@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 riscv-slic = { path = "../riscv-slic" }
-riscv-rt = { git = "https://github.com/rust-embedded/riscv", branch = "riscv-pac-only" } # TODO use crates.io
+riscv-rt = { git = "https://github.com/rust-embedded/riscv", branch = "master" } # TODO use crates.io
 hifive1 = { git = "https://github.com/greenlsi/hifive1.git", branch = "master", features = ["board-redv"] } # TODO use crates.io
 bare-metal = "0.2"
 panic-halt = "0.2.0"

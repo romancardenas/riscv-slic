@@ -17,7 +17,7 @@ features = ["clint-backend"]
 [dependencies]
 critical-section = "1.1.2"
 heapless = "0.8.0"
-riscv = { git = "https://github.com/rust-embedded/riscv", branch = "riscv-pac-only" } # TODO use crates.io
+riscv = { git = "https://github.com/rust-embedded/riscv", branch = "master" } # TODO use crates.io
 riscv-slic-macros = { path = "../riscv-slic-macros", version = "0.1.0" }
 
 [features]
