@@ -10,7 +10,7 @@ mod slic;
 pub use api::*;
 pub use slic::{new_slic, MutexSLIC};
 
-/// Trait for enums of interrupt numbers.
+/// Trait for enums of software interrupt numbers.
 ///
 /// This trait should only be implemented by the [`riscv_slic_macros::codegen`]
 /// macro for the enum of available software interrupts.

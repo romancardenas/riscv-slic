@@ -15,9 +15,9 @@ targets = ["riscv32imc-unknown-none-elf"]
 features = ["clint-backend"]
 
 [dependencies]
-critical-section = "1.1.2"
+critical-section = "1.2.0"
 heapless = "0.8.0"
-riscv = "0.11.1"
+riscv = "0.12.1"
 riscv-slic-macros = { path = "../riscv-slic-macros", version = "0.1.0" }
 
 [features]
@@ -25,4 +25,5 @@ msoft = [] # do not enable this feature directly. Use one of the *-backend featu
 ssoft = ["riscv/s-mode"] # do not enable this feature directly. Use one of the *-backend features instead
 
 clint-backend = ["msoft", "riscv-slic-macros/clint-backend"] # enable this feature to use the CLINT peripheral as SWI backend
+mecall-backend = ["riscv-slic-macros/mecall-backend"] # enable this feature to use the machine-level ECALL instruction as SWI backend
 ssoft-backend = ["ssoft", "riscv-slic-macros/ssoft-backend"] # enable this feature to use supervisor-level software interrupts as SWI backend

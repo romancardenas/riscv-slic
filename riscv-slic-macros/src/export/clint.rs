@@ -53,7 +53,7 @@ pub fn export_quote(input: &CodegenInput) -> TokenStream {
         #[inline]
         #[no_mangle]
         pub unsafe fn __riscv_slic_swi_pend() {
-            let msip = #pac::CLINT::mswi().msip(#pac::HartId::#hart_id);
+            let msip = #pac::CLINT::mswi().msip(#pac::interrupt::Hart::#hart_id);
             msip.pend();
         }
 
@@ -65,7 +65,7 @@ pub fn export_quote(input: &CodegenInput) -> TokenStream {
         #[inline]
         #[no_mangle]
         pub unsafe fn __riscv_slic_swi_unpend() {
-            let msip = #pac::CLINT::mswi().msip(#pac::HartId::#hart_id);
+            let msip = #pac::CLINT::mswi().msip(#pac::interrupt::Hart::#hart_id);
             msip.unpend();
         }
     }

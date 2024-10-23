@@ -2,7 +2,8 @@
 members = [
     "riscv-slic",
     "riscv-slic-macros",
-    "hifive1-test",
+    "tests-clint",
+    "tests-mecall",
 ]
 default-members = [
     "riscv-slic",

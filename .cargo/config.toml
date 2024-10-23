@@ -4,6 +4,7 @@ runner = "qemu-system-riscv32 -machine sifive_e,revb=true -nographic -kernel"
 # runner = "probe-run --chip fe310-g002 --verbose"
 rustflags = [
   "-C", "link-arg=-Thifive1-link.x",
+    "--cfg", "portable_atomic_target_feature=\"zaamo\"",
 ]
 
 [build]

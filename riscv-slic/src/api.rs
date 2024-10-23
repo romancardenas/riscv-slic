@@ -1,4 +1,4 @@
-pub use riscv::interrupt::{disable, enable};
+pub use riscv::interrupt::{disable, enable, nested};
 
 #[cfg(feature = "msoft")]
 use riscv::register::mie::{clear_msoft as disable_swi, set_msoft as enable_swi};
@@ -6,6 +6,7 @@ use riscv::register::mie::{clear_msoft as disable_swi, set_msoft as enable_swi};
 use riscv::register::sie::{clear_ssoft as disable_swi, set_ssoft as enable_swi};
 
 extern "Rust" {
+    #[cfg(not(feature = "mecall-backend"))]
     fn __riscv_slic_swi_unpend();
     fn __riscv_slic_get_threshold() -> u8;
     fn __riscv_slic_set_threshold(priority: u8);
@@ -20,13 +21,15 @@ extern "Rust" {
 ///
 /// # Note
 ///
-/// This function does **NOT** modify the [`riscv::register::mstatus`] register.
+/// This function does **NOT** modify the [`mstatus`](`riscv::register::mstatus`) register.
 /// If you want to disable **ANY** other interrupt source, you must **ALSO** use the [`disable`] function.
 #[inline]
 pub fn clear_interrupts() {
     // SAFETY: interrupts are disabled before modifying thresholds/priorities
     unsafe {
+        #[cfg(not(feature = "mecall-backend"))]
         disable_swi();
+        #[cfg(not(feature = "mecall-backend"))]
         __riscv_slic_swi_unpend();
         __riscv_slic_set_threshold(u8::MAX);
     }
@@ -37,7 +40,7 @@ pub fn clear_interrupts() {
 ///
 /// # Note
 ///
-/// This function does not modify the [`riscv::register::mstatus`] register.
+/// This function does not modify the [`mstatus`](`riscv::register::mstatus`) register.
 /// If you want to enable **ANY** other interrupt source, you must **ALSO** use the [`enable`] function.
 ///
 /// # Safety
@@ -46,6 +49,7 @@ pub fn clear_interrupts() {
 #[inline]
 pub unsafe fn set_interrupts() {
     __riscv_slic_set_threshold(0);
+    #[cfg(not(feature = "mecall-backend"))]
     enable_swi();
 }
 
@@ -60,9 +64,7 @@ pub fn get_threshold() -> u8 {
 ///
 /// # Safety
 ///
-/// Setting the priority threshold to a value lower than the current threshold
-/// may lead to priority inversion. If you want to make sure that the threshold
-/// is only raised, use the [`raise_threshold`] function instead.
+/// Setting the priority threshold to a value lower than the current may lead to priority inversion.
 #[inline]
 pub unsafe fn set_threshold(priority: u8) {
     __riscv_slic_set_threshold(priority);

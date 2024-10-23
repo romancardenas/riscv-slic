@@ -2,8 +2,11 @@ use core::cell::RefCell;
 use critical_section::Mutex;
 use heapless::binary_heap::{BinaryHeap, Max};
 
+#[doc(hidden)]
 pub type MutexSLIC<const N: usize> = Mutex<RefCell<SLIC<N>>>;
 
+#[doc(hidden)]
+#[inline]
 pub const fn new_slic<const N: usize>() -> MutexSLIC<N> {
     Mutex::new(RefCell::new(SLIC::new()))
 }
