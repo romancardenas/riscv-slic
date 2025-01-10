@@ -15,7 +15,7 @@ jobs:
   ci-linux:
     strategy:
       matrix:
-        # All generated code should be running on stable now, MRSV is 1.75.0
+        # All generated code should be running on stable now, MRSV is 1.76.0
         toolchain: 
         - stable
         - nightly
