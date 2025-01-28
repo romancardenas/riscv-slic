@@ -3,6 +3,38 @@ use quote::quote;
 
 pub fn api_mod() -> TokenStream {
     quote!(
+        /// Enables the software interrupt controller and triggers a software interrupt if ready.
+        ///
+        /// # Safety
+        ///
+        /// This function is only for `riscv-slic` internal use. Do not call it directly.
+        #[inline]
+        #[no_mangle]
+        pub unsafe fn __riscv_slic_enable() {
+            critical_section::with(|cs| {
+                if {
+                    let mut slic = __SLIC.borrow_ref_mut(cs);
+                    slic.enable()
+                } {
+                    // trigger a software interrupt if the SLIC is still ready at this point
+                    __riscv_slic_swi_pend();
+                }
+            });
+        }
+
+        /// Disables the software interrupt controller and clears any pending software interrupt.
+        ///
+        /// # Safety
+        ///
+        /// This function is only for `riscv-slic` internal use. Do not call it directly.
+        #[inline]
+        #[no_mangle]
+        pub unsafe fn __riscv_slic_disable() {
+            critical_section::with(|cs| {
+                __SLIC.borrow_ref_mut(cs).disable();
+            });
+        }
+
         /// Returns the current priority threshold of the SLIC.
         ///
         /// # Safety

@@ -1,13 +1,16 @@
-pub use riscv::interrupt::{disable, enable, nested};
+pub use riscv::interrupt::nested;
 
+use riscv::interrupt::{disable as disable_interrupts, enable as enable_interrupts};
 #[cfg(feature = "msoft")]
 use riscv::register::mie::{clear_msoft as disable_swi, set_msoft as enable_swi};
 #[cfg(feature = "ssoft")]
 use riscv::register::sie::{clear_ssoft as disable_swi, set_ssoft as enable_swi};
 
 extern "Rust" {
-    #[cfg(not(feature = "mecall-backend"))]
+    #[cfg(any(feature = "msoft", feature = "ssoft"))]
     fn __riscv_slic_swi_unpend();
+    fn __riscv_slic_enable();
+    fn __riscv_slic_disable();
     fn __riscv_slic_get_threshold() -> u8;
     fn __riscv_slic_set_threshold(priority: u8);
     fn __riscv_slic_raise_threshold(priority: u8) -> Result<u8, ()>;
@@ -16,41 +19,31 @@ extern "Rust" {
     fn __riscv_slic_pend(interrupt: u16);
 }
 
-/// Clears software interrupt flags to avoid interruptions.
-/// It also resets the software interrupt controllers.
-///
-/// # Note
-///
-/// This function does **NOT** modify the [`mstatus`](`riscv::register::mstatus`) register.
-/// If you want to disable **ANY** other interrupt source, you must **ALSO** use the [`disable`] function.
-#[inline]
-pub fn clear_interrupts() {
-    // SAFETY: interrupts are disabled before modifying thresholds/priorities
-    unsafe {
-        #[cfg(not(feature = "mecall-backend"))]
-        disable_swi();
-        #[cfg(not(feature = "mecall-backend"))]
-        __riscv_slic_swi_unpend();
-        __riscv_slic_set_threshold(u8::MAX);
-    }
-}
-
-/// Sets the interrupt flags to allow software interrupts.
-/// It also sets the interrupt threshold to 0 (i.e., accept all interrupts).
-///
-/// # Note
-///
-/// This function does not modify the [`mstatus`](`riscv::register::mstatus`) register.
-/// If you want to enable **ANY** other interrupt source, you must **ALSO** use the [`enable`] function.
+/// Enables the SLIC, software interrupts (if needed), and system interrupts.
 ///
 /// # Safety
 ///
 /// This function may break mask-based critical sections.
 #[inline]
-pub unsafe fn set_interrupts() {
-    __riscv_slic_set_threshold(0);
-    #[cfg(not(feature = "mecall-backend"))]
+pub unsafe fn enable() {
+    __riscv_slic_enable();
+    #[cfg(any(feature = "msoft", feature = "ssoft"))]
     enable_swi();
+    enable_interrupts();
+}
+
+/// Disables system interrupts, software interrupts (if needed), and the SLIC.
+#[inline]
+pub fn disable() {
+    disable_interrupts();
+    #[cfg(any(feature = "msoft", feature = "ssoft"))]
+    // SAFETY: it is safe to clear software interrupt flags
+    unsafe {
+        disable_swi();
+        // __riscv_slic_swi_unpend();
+    }
+    // SAFETY: interrupts are disabled before disabling SLIC
+    unsafe { __riscv_slic_disable() };
 }
 
 /// Stabilized API for getting the current threshold of the SLIC.

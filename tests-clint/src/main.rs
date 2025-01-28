@@ -82,7 +82,6 @@ fn main() -> ! {
     sprintln!("Configuring SLIC...");
     // make sure that interrupts are off
     riscv_slic::disable();
-    riscv_slic::clear_interrupts();
     // Set priorities
     unsafe {
         riscv_slic::set_priority(SoftwareInterrupt::SoftLow, 1); // low priority
@@ -92,7 +91,6 @@ fn main() -> ! {
 
     sprintln!("Enabling interrupts...");
     unsafe {
-        riscv_slic::set_interrupts();
         CLINT::mtimer_enable();
         riscv_slic::enable();
     }

@@ -30,13 +30,13 @@ fn machine_timer() {
     let mtimecmp = CLINT::mtimecmp0();
     mtimecmp.modify(|val| *val += CLINT::freq() as u64);
 
-    riscv_slic::clear_interrupts();
+    riscv_slic::disable();
     for i in 0..=SoftwareInterrupt::MAX_INTERRUPT_NUMBER {
         let interrupt = SoftwareInterrupt::from_number(i).unwrap();
         riscv_slic::pend(interrupt);
         sprintln!("Pend: {:?}", interrupt);
     }
-    unsafe { riscv_slic::set_interrupts() };
+    unsafe { riscv_slic::enable() };
 
     sprintln!("Timer OUT");
 }
@@ -92,7 +92,6 @@ fn main() -> ! {
     sprintln!("Configuring SLIC...");
     // make sure that interrupts are off
     riscv_slic::disable();
-    riscv_slic::clear_interrupts();
     // Set priorities
     unsafe {
         riscv_slic::set_priority(SoftwareInterrupt::Soft0, 1); // low priority
@@ -102,7 +101,6 @@ fn main() -> ! {
 
     sprintln!("Enabling interrupts...");
     unsafe {
-        riscv_slic::set_interrupts();
         CLINT::mtimer_enable();
         riscv_slic::enable();
     }
