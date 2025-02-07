@@ -1,6 +1,6 @@
 [package]
 name = "riscv-slic"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 description = "RISC-V Software-Level Interrupt Controller"
 license = "MIT"
@@ -18,7 +18,7 @@ features = ["clint-backend"]
 critical-section = "1.2.0"
 heapless = "0.8.0"
 riscv = "0.12.1"
-riscv-slic-macros = { path = "../riscv-slic-macros", version = "0.1.0" }
+riscv-slic-macros = { path = "../riscv-slic-macros", version = "0.2.0" }
 
 [features]
 msoft = [] # do not enable this feature directly. Use one of the *-backend features instead
