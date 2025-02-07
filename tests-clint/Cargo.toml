@@ -1,0 +1,10 @@
+[package]
+name = "tests-clint"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+riscv-slic = { path = "../riscv-slic", features = ["clint-backend"] }
+riscv-rt = "0.13.0"
+hifive1 = { version = "0.13.0", features = ["board-redv"] }
+panic-halt = "1.0.0"

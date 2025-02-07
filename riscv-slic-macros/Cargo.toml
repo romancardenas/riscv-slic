@@ -18,4 +18,5 @@ msoft = [] # do not enable this feature directly. Use one of the *-backend featu
 ssoft = [] # do not enable this feature directly. Use one of the *-backend features instead
 
 clint-backend = ["msoft"] # enable this feature to use the CLINT peripheral as SWI backend
+mecall-backend = [] # enable this feature to use the machine-level ECALL instruction as SWI backend
 ssoft-backend = ["ssoft"] # enable this feature to use the supervisor-level software interrupt as SWI backend

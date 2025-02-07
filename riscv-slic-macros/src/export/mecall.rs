@@ -19,7 +19,7 @@ impl Parse for ExportBackendInput {
 
 pub fn export_quote(_input: &CodegenInput) -> TokenStream {
     quote! {
-        /// Triggers a supervisor software interrupt via the `SIP` register.
+        /// Triggers an environment call exception
         ///
         /// # Safety
         ///
@@ -27,10 +27,10 @@ pub fn export_quote(_input: &CodegenInput) -> TokenStream {
         #[inline]
         #[no_mangle]
         pub unsafe fn __riscv_slic_swi_pend() {
-            riscv_slic::riscv::register::sip::set_ssoft();
+            riscv_slic::nested(|| { riscv_slic::riscv::asm::ecall(); });
         }
 
-        /// Clears the Supervisor Software Interrupt Pending bit in the `SIP` register.
+        /// Increments the machine exception program counter by 4
         ///
         /// # Safety
         ///
@@ -38,7 +38,8 @@ pub fn export_quote(_input: &CodegenInput) -> TokenStream {
         #[inline]
         #[no_mangle]
         pub unsafe fn __riscv_slic_swi_unpend() {
-            riscv_slic::riscv::register::sip::clear_ssoft();
+            let mepc = riscv_slic::riscv::register::mepc::read();
+            riscv_slic::riscv::register::mepc::write(mepc + 4);
         }
     }
 }

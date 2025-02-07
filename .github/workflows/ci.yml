@@ -8,19 +8,21 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-C link-arg=-Thifive1-link.x --cfg portable_atomic_target_feature=\"zaamo\""
 
 jobs:
   # On Linux, we check that the crate builds and links for all the toolchains and targets.
   ci-linux:
     strategy:
       matrix:
-        # All generated code should be running on stable now, MRSV is 1.75.0
+        # All generated code should be running on stable now, MRSV is 1.76.0
         toolchain: 
         - stable
         - nightly
-        - 1.75.0
+        - 1.76.0
         cargo_flags:
           - "clint-backend"
+          - "mecall-backend"
         include:
           # Nightly is only for reference and allowed to fail
           - rust: nightly
@@ -34,10 +36,14 @@ jobs:
         toolchain: ${{ matrix.toolchain }}
         targets: riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf,riscv64gc-unknown-none-elf
     - name: Build riscv32i-unknown-none-elf
-      run: RUSTFLAGS="-C link-arg=-Thifive1-link.x" cargo build --workspace --target riscv32i-unknown-none-elf --features=${{ matrix.cargo_flags }}
+      run: RUSTFLAGS=$RUSTFLAGS cargo build --target riscv32i-unknown-none-elf --features=${{ matrix.cargo_flags }}
     - name: Build riscv32imc-unknown-none-elf
-      run: RUSTFLAGS="-C link-arg=-Thifive1-link.x" cargo build --workspace --target riscv32imc-unknown-none-elf --features=${{ matrix.cargo_flags }}
+      run: RUSTFLAGS=$RUSTFLAGS cargo build --target riscv32imc-unknown-none-elf --features=${{ matrix.cargo_flags }}
     - name: Build riscv32imac-unknown-none-elf
-      run: RUSTFLAGS="-C link-arg=-Thifive1-link.x" cargo build --target riscv32imac-unknown-none-elf --workspace --features=${{ matrix.cargo_flags }}
+      run: RUSTFLAGS=$RUSTFLAGS cargo build --target riscv32imac-unknown-none-elf --features=${{ matrix.cargo_flags }}
     - name: Build riscv64gc-unknown-none-elf (no example)
       run: cargo build --target riscv64gc-unknown-none-elf --features=${{ matrix.cargo_flags }}
+    - name: Build CLINT backend examples
+      run: RUSTFLAGS=$RUSTFLAGS cargo build --package tests-clint
+    - name: Build MECALL backend examples
+      run: RUSTFLAGS=$RUSTFLAGS cargo build --package tests-mecall

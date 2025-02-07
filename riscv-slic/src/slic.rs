@@ -2,8 +2,11 @@ use core::cell::RefCell;
 use critical_section::Mutex;
 use heapless::binary_heap::{BinaryHeap, Max};
 
+#[doc(hidden)]
 pub type MutexSLIC<const N: usize> = Mutex<RefCell<SLIC<N>>>;
 
+#[doc(hidden)]
+#[inline]
 pub const fn new_slic<const N: usize>() -> MutexSLIC<N> {
     Mutex::new(RefCell::new(SLIC::new()))
 }
@@ -12,7 +15,9 @@ pub const fn new_slic<const N: usize>() -> MutexSLIC<N> {
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug)]
 pub struct SLIC<const N: usize> {
-    /// priority threshold. The controller only triggers software
+    /// Enable flag. If `false`, the controller will not trigger software interrupts.
+    enabled: bool,
+    /// Priority threshold. The controller only triggers software
     /// interrupts if there is a pending interrupt with higher priority.
     threshold: u8,
     /// Array with the priorities assigned to each software interrupt source.
@@ -29,11 +34,26 @@ impl<const N: usize> SLIC<N> {
     #[inline]
     const fn new() -> Self {
         Self {
+            enabled: false,
             threshold: 0,
             priorities: [0; N],
             pending: [false; N],
             queue: BinaryHeap::new(),
         }
+    }
+
+    /// Enables the software interrupt controller.
+    /// Returns `true` if the controller is ready to trigger an interrupt.
+    #[inline]
+    pub fn enable(&mut self) -> bool {
+        self.enabled = true;
+        self.is_ready()
+    }
+
+    /// Disables the software interrupt controller.
+    #[inline]
+    pub fn disable(&mut self) {
+        self.enabled = false;
     }
 
     /// Returns the current priority of an interrupt source.
@@ -96,10 +116,11 @@ impl<const N: usize> SLIC<N> {
     /// Returns `true` if the next queued interrupt can be triggered.
     #[inline]
     pub fn is_ready(&self) -> bool {
-        match self.queue.peek().map(|&(p, _)| p) {
-            Some(p) => p > self.threshold,
-            None => false,
-        }
+        self.enabled
+            && match self.queue.peek().map(|&(p, _)| p) {
+                Some(p) => p > self.threshold,
+                None => false,
+            }
     }
 
     /// Sets an interrupt source as pending.

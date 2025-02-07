@@ -3,6 +3,38 @@ use quote::quote;
 
 pub fn api_mod() -> TokenStream {
     quote!(
+        /// Enables the software interrupt controller and triggers a software interrupt if ready.
+        ///
+        /// # Safety
+        ///
+        /// This function is only for `riscv-slic` internal use. Do not call it directly.
+        #[inline]
+        #[no_mangle]
+        pub unsafe fn __riscv_slic_enable() {
+            critical_section::with(|cs| {
+                if {
+                    let mut slic = __SLIC.borrow_ref_mut(cs);
+                    slic.enable()
+                } {
+                    // trigger a software interrupt if the SLIC is still ready at this point
+                    __riscv_slic_swi_pend();
+                }
+            });
+        }
+
+        /// Disables the software interrupt controller and clears any pending software interrupt.
+        ///
+        /// # Safety
+        ///
+        /// This function is only for `riscv-slic` internal use. Do not call it directly.
+        #[inline]
+        #[no_mangle]
+        pub unsafe fn __riscv_slic_disable() {
+            critical_section::with(|cs| {
+                __SLIC.borrow_ref_mut(cs).disable();
+            });
+        }
+
         /// Returns the current priority threshold of the SLIC.
         ///
         /// # Safety
@@ -27,10 +59,12 @@ pub fn api_mod() -> TokenStream {
         #[no_mangle]
         pub unsafe fn __riscv_slic_set_threshold(thresh: u8) {
             critical_section::with(|cs| {
-                let mut slic = __SLIC.borrow_ref_mut(cs);
-                slic.set_threshold(thresh);
-                // trigger a software interrupt if the SLIC is still ready at this point
-                if slic.is_ready() {
+                if {
+                    let mut slic = __SLIC.borrow_ref_mut(cs);
+                    slic.set_threshold(thresh);
+                    slic.is_ready()
+                } {
+                    // trigger a software interrupt if the SLIC is still ready at this point
                     __riscv_slic_swi_pend();
                 }
             });
@@ -48,10 +82,13 @@ pub fn api_mod() -> TokenStream {
         #[no_mangle]
         pub unsafe fn __riscv_slic_raise_threshold(priority: u8) -> Result<u8, ()> {
             critical_section::with(|cs| {
-                let mut slic = __SLIC.borrow_ref_mut(cs);
-                let res = slic.raise_threshold(priority);
+                let (res, is_ready) = {
+                    let mut slic = __SLIC.borrow_ref_mut(cs);
+                    let res = slic.raise_threshold(priority);
+                    (res, slic.is_ready())
+                };
                 // trigger a software interrupt if the SLIC is still ready at this point
-                if slic.is_ready() {
+                if is_ready {
                     __riscv_slic_swi_pend();
                 }
                 res
@@ -91,9 +128,11 @@ pub fn api_mod() -> TokenStream {
         #[no_mangle]
         pub unsafe fn __riscv_slic_pend(interrupt: u16) {
             critical_section::with(|cs| {
-                let mut slic = __SLIC.borrow_ref_mut(cs);
-                slic.pend(interrupt);
-                if slic.is_ready() {
+                if {
+                    let mut slic = __SLIC.borrow_ref_mut(cs);
+                    slic.pend(interrupt);
+                    slic.is_ready()
+                } {
                     __riscv_slic_swi_pend();
                 }
             });
