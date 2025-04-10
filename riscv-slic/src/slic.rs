@@ -43,11 +43,9 @@ impl<const N: usize> SLIC<N> {
     }
 
     /// Enables the software interrupt controller.
-    /// Returns `true` if the controller is ready to trigger an interrupt.
     #[inline]
-    pub fn enable(&mut self) -> bool {
+    pub fn enable(&mut self) {
         self.enabled = true;
-        self.is_ready()
     }
 
     /// Disables the software interrupt controller.
@@ -117,8 +115,8 @@ impl<const N: usize> SLIC<N> {
     #[inline]
     pub fn is_ready(&self) -> bool {
         self.enabled
-            && match self.queue.peek().map(|&(p, _)| p) {
-                Some(p) => p > self.threshold,
+            && match self.queue.peek() {
+                Some((p, _)) => *p > self.threshold,
                 None => false,
             }
     }
@@ -137,7 +135,7 @@ impl<const N: usize> SLIC<N> {
         // set the task to pending and push to the queue if it was not pending beforehand.
         if !self.pending[i] {
             self.pending[i] = true;
-            // SAFETY: we guarantee that the same task can not be pending more than once
+            // SAFETY: we guarantee that a task can not pend more than once (!self.pending[i])
             unsafe { self.queue.push_unchecked((self.priorities[i], interrupt)) };
         }
     }
@@ -145,15 +143,14 @@ impl<const N: usize> SLIC<N> {
     /// Pops the pending tasks with highest priority.
     #[inline]
     pub fn pop(&mut self) -> Option<(u8, u16)> {
-        while self.is_ready() {
-            // SAFETY: we guarantee that the queue is not empty
+        if self.is_ready() {
+            // SAFETY: we guarantee that the queue is not empty (is_ready() == true)
             let (priority, interrupt) = unsafe { self.queue.pop_unchecked() };
             let i = interrupt as usize;
-            if self.pending[i] {
-                self.pending[i] = false;
-                return Some((priority, interrupt));
-            }
+            self.pending[i] = false;
+            Some((priority, interrupt))
+        } else {
+            None
         }
-        None
     }
 }

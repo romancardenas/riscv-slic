@@ -14,7 +14,8 @@ pub fn api_mod() -> TokenStream {
             critical_section::with(|cs| {
                 if {
                     let mut slic = __SLIC.borrow_ref_mut(cs);
-                    slic.enable()
+                    slic.enable();
+                    slic.is_ready()
                 } {
                     // trigger a software interrupt if the SLIC is still ready at this point
                     __riscv_slic_swi_pend();
