@@ -1,9 +1,9 @@
-use crate::input::CodegenInput;
+use crate::input::SwiAttr;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
+    Error, Path, Result,
     parse::{Parse, ParseStream},
-    Error, Result,
 };
 
 pub struct BackendInput {
@@ -16,7 +16,11 @@ impl Parse for BackendInput {
     }
 }
 
-pub fn export_quote(input: &CodegenInput) -> TokenStream {
+pub fn export_swi_handler_attribute(pac: &Path) -> TokenStream {
+    todo!("define the attribute to be applied to the software interrupt handler");
+}
+
+pub fn export_quote(input: &SwiAttr) -> TokenStream {
     quote! {
         /// Triggers a software interrupt
         ///
@@ -25,7 +29,7 @@ pub fn export_quote(input: &CodegenInput) -> TokenStream {
         /// This function is only for `riscv-slic` internal use. Do not call it directly.
         #[inline]
         #[no_mangle]
-        pub unsafe fn __riscv_slic_swi_pend() {
+        unsafe fn __riscv_slic_swi_pend() {
             todo!("define how to trigger a software interrupt");
         }
 
@@ -36,7 +40,7 @@ pub fn export_quote(input: &CodegenInput) -> TokenStream {
         /// This function is only for `riscv-slic` internal use. Do not call it directly.
         #[inline]
         #[no_mangle]
-        pub unsafe fn __riscv_slic_swi_unpend() {
+        unsafe fn __riscv_slic_swi_unpend() {
             todo!("define how to clear a software interrupt");
         }
     }

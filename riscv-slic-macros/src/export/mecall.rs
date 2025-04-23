@@ -1,9 +1,9 @@
-use crate::input::CodegenInput;
+use crate::input::SwiAttr;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
+    Error, Path, Result,
     parse::{Parse, ParseStream},
-    Error, Result,
 };
 
 pub struct ExportBackendInput();
@@ -17,7 +17,14 @@ impl Parse for ExportBackendInput {
     }
 }
 
-pub fn export_quote(_input: &CodegenInput) -> TokenStream {
+pub fn export_swi_handler_attribute(pac: &Path) -> TokenStream {
+    quote! {
+        #[::riscv_rt::exception(#pac::interrupt::Exception::MachineEnvCall)]
+    }
+}
+
+pub fn export_quote(input: &SwiAttr) -> TokenStream {
+    let slic = &input.slic;
     quote! {
         /// Triggers an environment call exception
         ///
@@ -25,9 +32,9 @@ pub fn export_quote(_input: &CodegenInput) -> TokenStream {
         ///
         /// This function is only for `riscv-slic` internal use. Do not call it directly.
         #[inline]
-        #[no_mangle]
-        pub unsafe fn __riscv_slic_swi_pend() {
-            riscv_slic::nested(|| { riscv_slic::riscv::asm::ecall(); });
+        #[unsafe(no_mangle)]
+        unsafe fn __riscv_slic_swi_pend() {
+            #slic::nested(|| { #slic::riscv::asm::ecall(); });
         }
 
         /// Increments the machine exception program counter by 4
@@ -36,10 +43,10 @@ pub fn export_quote(_input: &CodegenInput) -> TokenStream {
         ///
         /// This function is only for `riscv-slic` internal use. Do not call it directly.
         #[inline]
-        #[no_mangle]
-        pub unsafe fn __riscv_slic_swi_unpend() {
-            let mepc = riscv_slic::riscv::register::mepc::read();
-            riscv_slic::riscv::register::mepc::write(mepc + 4);
+        #[unsafe(no_mangle)]
+        unsafe fn __riscv_slic_swi_unpend() {
+            let mepc = #slic::riscv::register::mepc::read();
+            #slic::riscv::register::mepc::write(mepc + 4);
         }
     }
 }

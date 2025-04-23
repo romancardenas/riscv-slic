@@ -1,72 +1,66 @@
-use crate::input::CodegenInput;
-use proc_macro2::{Ident, TokenStream};
+use crate::{
+    export::export_swi_handler_attribute,
+    input::{SwiAttr, SwiItem},
+};
+use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Path;
 
-/// Helper function for generating the interrupt enums. It assigns a number to each source.
-fn interrupts_enum(input: &[Ident]) -> Vec<TokenStream> {
-    input
+fn interrupts_impl(slic: &Path, input: &SwiItem) -> TokenStream {
+    let swi_name = &input.name;
+    let sources = &input.sources;
+    let n_interrupts = sources.len();
+
+    let (mut from, mut to) = (Vec::new(), Vec::new());
+    for (i, interrupt) in sources
         .iter()
         .enumerate()
-        .map(|(i, interrupt)| format!("{interrupt} = {i}").parse().unwrap())
-        .collect()
-}
+        .map(|(i, interrupt)| (i as u16, interrupt))
+    {
+        to.push(quote! {
+            #swi_name::#interrupt => #i,
+        });
+        from.push(quote! {
+            #i => Ok(#swi_name::#interrupt),
+        });
+    }
+    quote! {
+        unsafe impl #slic::InterruptNumber for #swi_name {
+            const MAX_INTERRUPT_NUMBER: u16 = #n_interrupts as u16 - 1;
 
-fn swi_handler_attribute(pac: &Path) -> TokenStream {
-    match () {
-        #[cfg(feature = "mecall-backend")]
-        () => quote! {
-            #[riscv_rt::exception(#pac::interrupt::Exception::MachineEnvCall)]
-        },
-        #[cfg(feature = "msoft")]
-        () => quote! {
-            #[riscv_rt::core_interrupt(#pac::interrupt::CoreInterrupt::MachineSoft)]
-        },
-        #[cfg(feature = "ssoft")]
-        () => quote! {
-            #[riscv_rt::core_interrupt(#pac::interrupt::CoreInterrupt::SupervisorSoft)]
-        },
+            #[inline(always)]
+            fn number(self) -> u16 {
+                match self {
+                    #(#to)*
+                }
+            }
+
+            #[inline(always)]
+            fn from_number(value: u16) -> Result<Self, u16> {
+                match value {
+                    #(#from)*
+                    _ => Err(value),
+                }
+            }
+        }
     }
 }
 
 /// Creates the SLIC module with the proper interrupt sources.
-pub fn swi_mod(input: &CodegenInput) -> TokenStream {
+pub fn swi_mod(attr: &SwiAttr, item: &SwiItem) -> TokenStream {
     let mut res = Vec::new();
 
-    let swi_handlers = &input.swi_handlers;
+    let slic = &attr.slic;
+    let swi_handlers = &item.sources;
     let n_interrupts = swi_handlers.len();
-    let swi_enums = interrupts_enum(swi_handlers);
-    let swi_handler_attribute = swi_handler_attribute(&input.pac);
+    let swi_handler_attribute = export_swi_handler_attribute(&attr.pac);
 
     if n_interrupts > 0 {
+        let swi_impl = interrupts_impl(slic, item);
         res.push(quote!(
-            #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-            #[doc(hidden)]
-            #[repr(u16)]
-            pub enum SoftwareInterrupt {
-                #(#swi_enums),*
-            }
+            #swi_impl
 
-            unsafe impl riscv_slic::InterruptNumber for SoftwareInterrupt {
-                const MAX_INTERRUPT_NUMBER: u16 = #n_interrupts as u16 - 1;
-
-                #[inline]
-                fn number(self) -> u16 {
-                    self as u16
-                }
-
-                #[inline]
-                fn from_number(value: u16) -> Result<Self, u16> {
-                    if value > Self::MAX_INTERRUPT_NUMBER {
-                        Err(value)
-                    } else {
-                        // SAFETY: the value is less than the maximum interrupt number
-                        Ok(unsafe { core::mem::transmute(value) })
-                    }
-                }
-            }
-
-            extern "C" {
+            unsafe extern "C" {
                 #(fn #swi_handlers ();)*
             }
         ));
@@ -78,14 +72,39 @@ pub fn swi_mod(input: &CodegenInput) -> TokenStream {
         ];
 
         /// The static SLIC instance
-        static mut __SLIC: riscv_slic::MutexSLIC<#n_interrupts> = riscv_slic::new_slic();
+        static mut __SLIC: #slic::slic::MutexSLIC<#n_interrupts> = #slic::slic::new_slic();
+
+        /// Type alias for the SLIC instance that hides the number of interrupts.
+        type SLIC = #slic::slic::SLIC<#n_interrupts>;
+
+        /// Utility function to operate on the SLIC under a critical section.
+        ///
+        /// # Safety
+        ///
+        /// This function is only for `riscv-slic` internal use. Do not call it directly.
+        #[inline]
+        unsafe fn __riscv_slic_cs<F, R>(f: F) -> R
+        where
+            F: FnOnce(&mut SLIC) -> R,
+        {
+            #slic::critical_section::with(|cs| {
+                let mut slic = __SLIC.borrow_ref_mut(cs);
+                f(&mut slic)
+            })
+        }
 
         /// Software interrupt handler to be used with the SLIC.
         #swi_handler_attribute
         unsafe fn riscv_slic_swi_handler() {
             __riscv_slic_swi_unpend();
             // We nest the handler to let other interrupts trigger
-            riscv_slic::nested(|| unsafe { __riscv_slic_pop() });
+            #slic::nested(|| {
+                if let Some((prev, int)) = __riscv_slic_pop() {
+                    __SOFTWARE_INTERRUPTS[int as usize]();
+                    // SAFETY: we restore the previous threshold after the function is done
+                    __riscv_slic_set_threshold(prev);
+                }
+             });
         }
     ));
     quote!(#(#res)*)

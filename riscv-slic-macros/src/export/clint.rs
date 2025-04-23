@@ -1,9 +1,9 @@
-use crate::input::CodegenInput;
+use crate::input::SwiAttr;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
+    Error, Ident, Path, Result, Token,
     parse::{Parse, ParseStream},
-    Error, Ident, Result, Token,
 };
 
 pub struct ExportBackendInput {
@@ -40,7 +40,13 @@ impl Parse for ExportBackendInput {
     }
 }
 
-pub fn export_quote(input: &CodegenInput) -> TokenStream {
+pub fn export_swi_handler_attribute(pac: &Path) -> TokenStream {
+    quote! {
+        #[::riscv_rt::core_interrupt(#pac::interrupt::CoreInterrupt::MachineSoft)]
+    }
+}
+
+pub fn export_quote(input: &SwiAttr) -> TokenStream {
     let pac = &input.pac;
     let backend = input.backend.as_ref().unwrap();
     let hart_id = &backend.hart_id;
@@ -51,8 +57,8 @@ pub fn export_quote(input: &CodegenInput) -> TokenStream {
         ///
         /// This function is only for `riscv-slic` internal use. Do not call it directly.
         #[inline]
-        #[no_mangle]
-        pub unsafe fn __riscv_slic_swi_pend() {
+        #[unsafe(no_mangle)]
+        unsafe fn __riscv_slic_swi_pend() {
             let msip = #pac::CLINT::mswi().msip(#pac::interrupt::Hart::#hart_id);
             msip.pend();
         }
@@ -63,8 +69,8 @@ pub fn export_quote(input: &CodegenInput) -> TokenStream {
         ///
         /// This function is only for `riscv-slic` internal use. Do not call it directly.
         #[inline]
-        #[no_mangle]
-        pub unsafe fn __riscv_slic_swi_unpend() {
+        #[unsafe(no_mangle)]
+        unsafe fn __riscv_slic_swi_unpend() {
             let msip = #pac::CLINT::mswi().msip(#pac::interrupt::Hart::#hart_id);
             msip.unpend();
         }

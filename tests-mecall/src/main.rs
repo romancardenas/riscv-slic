@@ -6,16 +6,21 @@ extern crate riscv_slic;
 
 use hifive1::{
     hal::{
+        DeviceResources,
         e310x::{self, CLINT},
         prelude::*,
-        DeviceResources,
     },
     pin, sprintln,
 };
 
 // generate SLIC code for this example
-riscv_slic::codegen!(pac = e310x, swi = [SoftLow, SoftMedium, SoftHigh]);
-use slic::SoftwareInterrupt; // Re-export of automatically generated enum of interrupts in previous macro
+#[derive(Debug, Clone, Copy)]
+#[riscv_slic::swi(pac = e310x)]
+enum SoftInterrupt {
+    Low,
+    Medium,
+    High,
+}
 
 /// HW handler for MachineTimer interrupts triggered by CLINT.
 #[riscv_rt::core_interrupt(CoreInterrupt::MachineTimer)]
@@ -25,28 +30,25 @@ fn machine_timer() {
 }
 
 /// Handler for SoftHigh task (high priority).
-#[allow(non_snake_case)]
-#[no_mangle]
-fn SoftHigh() {
+#[riscv_slic::interrupt(SoftInterrupt::High)]
+fn high() {
     sprintln!("    start SoftHigh");
     sprintln!("    stop SoftHigh");
 }
 
 /// Handler for SoftMedium task (medium priority). This task pends both SoftLow and SoftHigh.
-#[allow(non_snake_case)]
-#[no_mangle]
-fn SoftMedium() {
+#[riscv_slic::interrupt(SoftInterrupt::Medium)]
+fn medium() {
     sprintln!("  start SoftMedium");
-    riscv_slic::pend(SoftwareInterrupt::SoftLow);
+    riscv_slic::pend(SoftInterrupt::Low);
     sprintln!("  middle SoftMedium");
-    riscv_slic::pend(SoftwareInterrupt::SoftHigh);
+    riscv_slic::pend(SoftInterrupt::High);
     sprintln!("  stop SoftMedium");
 }
 
 /// Handler for SoftLow task (low priority).
-#[allow(non_snake_case)]
-#[no_mangle]
-fn SoftLow() {
+#[riscv_slic::interrupt(SoftInterrupt::Low)]
+fn low() {
     sprintln!("start SoftLow");
     sprintln!("stop SoftLow");
 }
@@ -80,9 +82,9 @@ fn main() -> ! {
     riscv_slic::disable();
     // Set priorities
     unsafe {
-        riscv_slic::set_priority(SoftwareInterrupt::SoftLow, 1); // low priority
-        riscv_slic::set_priority(SoftwareInterrupt::SoftMedium, 2); // medium priority
-        riscv_slic::set_priority(SoftwareInterrupt::SoftHigh, 3); // high priority
+        riscv_slic::set_priority(SoftInterrupt::Low, 1); // low priority
+        riscv_slic::set_priority(SoftInterrupt::Medium, 2); // medium priority
+        riscv_slic::set_priority(SoftInterrupt::High, 3); // high priority
     }
 
     sprintln!("Enabling interrupts...");
@@ -97,6 +99,6 @@ fn main() -> ! {
         sprintln!("Waiting for interrupts...");
         riscv_slic::riscv::asm::wfi();
         sprintln!("Interrupt received!");
-        riscv_slic::pend(SoftwareInterrupt::SoftMedium);
+        riscv_slic::pend(SoftInterrupt::Medium);
     }
 }

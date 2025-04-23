@@ -5,20 +5,19 @@ pub use riscv;
 pub use riscv_slic_macros::*;
 
 mod api;
-mod slic;
+pub mod slic;
 
 pub use api::*;
-pub use slic::{new_slic, MutexSLIC};
 
 /// Trait for enums of software interrupt numbers.
 ///
-/// This trait should only be implemented by the [`riscv_slic_macros::codegen`]
-/// macro for the enum of available software interrupts.
+/// This trait should only be implemented by the [`swi`] macro for
+/// the enum of available software interrupts.
 /// Each variant must convert to a `u16` of its interrupt number.
 ///
 /// # Safety
 ///
-/// Do NOT implement this trait. It is left for [`riscv_slic_macros::codegen`].
+/// Do **NOT** manually implement this trait. It is left for the [`swi`] macro.
 /// This trait must only be implemented on enums of software interrupts. Each
 /// enum variant must represent a distinct value (no duplicates are permitted),
 /// and must always return the same value (do not change at runtime).
