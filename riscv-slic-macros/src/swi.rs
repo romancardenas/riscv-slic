@@ -53,7 +53,7 @@ pub fn swi_mod(attr: &SwiAttr, item: &SwiItem) -> TokenStream {
     let slic = &attr.slic;
     let swi_handlers = &item.sources;
     let n_interrupts = swi_handlers.len();
-    let swi_handler_attribute = export_swi_handler_attribute(&attr.pac);
+    let swi_handler_attribute = export_swi_handler_attribute(&attr.pac, &attr.backend);
 
     if n_interrupts > 0 {
         let swi_impl = interrupts_impl(slic, item);

@@ -1,5 +1,5 @@
 use crate::input::SwiAttr;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
     Error, Path, Result,
@@ -10,13 +10,19 @@ pub struct BackendInput {
     // Define your backend-specific input here
 }
 
+impl Default for BackendInput {
+    fn default() -> Self {
+        todo!("define default values for your backend-specific input")
+    }
+}
+
 impl Parse for BackendInput {
     fn parse(input: ParseStream) -> Result<Self> {
         todo!("define how to parse your backend-specific input")
     }
 }
 
-pub fn export_swi_handler_attribute(pac: &Path) -> TokenStream {
+pub fn export_swi_handler_attribute(pac: &Path, backend: &ExportBackendInput) -> TokenStream {
     todo!("define the attribute to be applied to the software interrupt handler");
 }
 

@@ -12,6 +12,6 @@ fn main() {
     if backends.is_empty() {
         panic!("No backend feature selected");
     } else if backends.len() > 1 {
-        panic!("Multiple backend features selected: {:?}", backends);
+        panic!("Multiple backend features selected: {backends:?}");
     }
 }

@@ -1,5 +1,5 @@
 use crate::input::SwiAttr;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
     Error, Ident, Path, Result, Token,
@@ -7,25 +7,44 @@ use syn::{
 };
 
 pub struct ExportBackendInput {
-    /// The identifier of the MSIP register in the CLINT peripheral
-    hart_id: Ident,
+    /// The identifier for the CLINT peripheral, defaults to `Clint`
+    clint_id: Ident,
+    /// The identifier for the core interrupt, defaults to `MachineSoft`
+    core_interrupt: Ident,
+}
+
+impl Default for ExportBackendInput {
+    fn default() -> Self {
+        Self {
+            clint_id: Ident::new("Clint", Span::call_site()),
+            core_interrupt: Ident::new("MachineSoft", Span::call_site()),
+        }
+    }
 }
 
 impl Parse for ExportBackendInput {
     fn parse(input: ParseStream) -> Result<Self> {
-        let mut hart_id = None;
+        let mut clint_id = None;
+        let mut core_interrupt = None;
 
         let content;
         syn::bracketed!(content in input);
         while !content.is_empty() {
             let ident: Ident = content.parse()?;
             match ident.to_string().as_str() {
-                "hart_id" => {
-                    if hart_id.is_some() {
+                "clint_id" => {
+                    if clint_id.is_some() {
                         return Err(Error::new(ident.span(), "duplicate identifier"));
                     }
                     content.parse::<Token![=]>()?; // consume the '='
-                    hart_id = Some(content.parse()?);
+                    clint_id = Some(content.parse()?);
+                }
+                "core_interrupt" => {
+                    if core_interrupt.is_some() {
+                        return Err(Error::new(ident.span(), "duplicate identifier"));
+                    }
+                    content.parse::<Token![=]>()?; // consume the '='
+                    core_interrupt = Some(content.parse()?);
                 }
                 _ => return Err(Error::new(ident.span(), "invalid identifier")),
             }
@@ -35,21 +54,24 @@ impl Parse for ExportBackendInput {
         }
 
         Ok(Self {
-            hart_id: hart_id.ok_or_else(|| Error::new(input.span(), "missing identifier"))?,
+            clint_id: clint_id.unwrap_or(Ident::new("Clint", input.span())),
+            core_interrupt: core_interrupt
+                .unwrap_or_else(|| Ident::new("MachineSoft", input.span())),
         })
     }
 }
 
-pub fn export_swi_handler_attribute(pac: &Path) -> TokenStream {
+pub fn export_swi_handler_attribute(pac: &Path, backend: &ExportBackendInput) -> TokenStream {
+    let core_interrupt = &backend.core_interrupt;
     quote! {
-        #[::riscv_rt::core_interrupt(#pac::interrupt::CoreInterrupt::MachineSoft)]
+        #[::riscv_rt::core_interrupt(#pac::interrupt::CoreInterrupt::#core_interrupt)]
     }
 }
 
 pub fn export_quote(input: &SwiAttr) -> TokenStream {
     let pac = &input.pac;
-    let backend = input.backend.as_ref().unwrap();
-    let hart_id = &backend.hart_id;
+    let backend = &input.backend;
+    let clint_id = &backend.clint_id;
     quote! {
         /// Triggers a machine software interrupt via the CLINT peripheral.
         ///
@@ -59,7 +81,8 @@ pub fn export_quote(input: &SwiAttr) -> TokenStream {
         #[inline]
         #[unsafe(no_mangle)]
         unsafe fn __riscv_slic_swi_pend() {
-            let msip = #pac::CLINT::mswi().msip(#pac::interrupt::Hart::#hart_id);
+            let clint = unsafe { #pac::#clint_id::steal() };
+            let msip = clint.mswi().msip_mhartid();
             msip.pend();
         }
 
@@ -71,7 +94,8 @@ pub fn export_quote(input: &SwiAttr) -> TokenStream {
         #[inline]
         #[unsafe(no_mangle)]
         unsafe fn __riscv_slic_swi_unpend() {
-            let msip = #pac::CLINT::mswi().msip(#pac::interrupt::Hart::#hart_id);
+            let clint = unsafe { #pac::#clint_id::steal() };
+            let msip = clint.mswi().msip_mhartid();
             msip.unpend();
         }
     }

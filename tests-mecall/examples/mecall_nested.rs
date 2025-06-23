@@ -8,7 +8,7 @@ use riscv_slic::InterruptNumber;
 use hifive1::{
     hal::{
         DeviceResources,
-        e310x::{self, CLINT},
+        e310x::{self, Clint},
         prelude::*,
     },
     pin, sprintln,
@@ -32,8 +32,10 @@ fn machine_timer() {
         COUNT += 1;
     }
 
-    let mtimecmp = CLINT::mtimecmp0();
-    mtimecmp.modify(|val| *val += CLINT::freq() as u64);
+    let clint = unsafe { Clint::steal() };
+    let mtimer = clint.mtimer();
+    let mtimecmp = mtimer.mtimecmp_mhartid();
+    mtimecmp.modify(|val| *val += mtimer.mtime_freq() as u64);
 
     riscv_slic::disable();
     for i in 0..=SoftInterrupt::MAX_INTERRUPT_NUMBER {
@@ -70,6 +72,7 @@ fn soft2() {
 #[riscv_rt::entry]
 fn main() -> ! {
     let resources = DeviceResources::take().unwrap();
+    let core_peripherals = resources.core_peripherals;
     let peripherals = resources.peripherals;
 
     let clocks = hifive1::configure_clocks(peripherals.PRCI, peripherals.AONCLK, 64.mhz().into());
@@ -86,10 +89,14 @@ fn main() -> ! {
 
     sprintln!("Configuring CLINT...");
     // First, we make sure that all PLIC the interrupts are disabled and set the interrupts priorities
-    CLINT::disable();
-    let mtimer = CLINT::mtimer();
-    mtimer.mtimecmp0.write(CLINT::freq() as u64);
-    mtimer.mtime.write(0);
+    let clint = core_peripherals.clint;
+    // First, we make sure that all PLIC the interrupts are disabled and set the interrupts priorities
+    clint.disable();
+    let mtimer = clint.mtimer();
+    mtimer
+        .mtimecmp_mhartid()
+        .write(clint.mtimer().mtime_freq() as u64);
+    mtimer.mtime().write(0);
 
     sprintln!("Configuring SLIC...");
     // make sure that interrupts are off
@@ -103,7 +110,7 @@ fn main() -> ! {
 
     sprintln!("Enabling interrupts...");
     unsafe {
-        CLINT::mtimer_enable();
+        mtimer.enable();
         riscv_slic::enable();
     }
 

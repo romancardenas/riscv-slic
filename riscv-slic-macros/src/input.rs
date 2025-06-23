@@ -9,8 +9,7 @@ pub use crate::export::ExportBackendInput; // backend-specific input
 pub struct SwiAttr {
     pub slic: Path,
     pub pac: Path,
-    #[allow(dead_code)]
-    pub backend: Option<ExportBackendInput>,
+    pub backend: ExportBackendInput,
 }
 
 impl Parse for SwiAttr {
@@ -53,7 +52,7 @@ impl Parse for SwiAttr {
         Ok(Self {
             slic: slic.unwrap_or_else(|| syn::parse_str("riscv_slic").unwrap()),
             pac: pac.ok_or_else(|| Error::new(input.span(), "missing identifier"))?,
-            backend,
+            backend: backend.unwrap_or_else(|| ExportBackendInput::default()),
         })
     }
 }
