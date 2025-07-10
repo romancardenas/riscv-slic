@@ -10,3 +10,8 @@ default-members = [
     "riscv-slic-macros",
 ]
 resolver = "2"
+
+[workspace.dependencies]
+riscv = { git = "https://github.com/rust-embedded/riscv.git", branch = "post-init" }
+riscv-rt = { git = "https://github.com/rust-embedded/riscv.git", branch = "post-init" }
+hifive1 = { git = "https://github.com/dmunizu/e310x.git", branch = "rvp-rework-conference", features = ["board-redv"] }

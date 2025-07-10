@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 riscv-slic = { path = "../riscv-slic", features = ["clint-backend"] }
-riscv-rt = "0.15.0"
-# hifive1 = { version = "0.13.0", features = ["board-redv"] }
-hifive1 = { git = "https://github.com/riscv-rust/e310x.git", branch = "rvp-rework", features = ["board-redv"] }
+riscv-rt = { workspace = true }
+hifive1 = { workspace = true }
 panic-halt = "1.0.0"
