@@ -72,7 +72,7 @@ pub fn swi_mod(attr: &SwiAttr, item: &SwiItem) -> TokenStream {
         ];
 
         /// The static SLIC instance
-        static mut __SLIC: #slic::slic::MutexSLIC<#n_interrupts> = #slic::slic::new_slic();
+        static __SLIC: #slic::slic::MutexSLIC<#n_interrupts> = #slic::slic::new_slic();
 
         /// Type alias for the SLIC instance that hides the number of interrupts.
         type SLIC = #slic::slic::SLIC<#n_interrupts>;
